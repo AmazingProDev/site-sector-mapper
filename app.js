@@ -3782,6 +3782,15 @@ function generateThematicSettings(source, attribute) {
                 });
             }
         }
+
+        // Calculate counts for each range
+        numValues.forEach(val => {
+            const range = ranges.find(r => val >= r.min && val <= r.max);
+            if (range) {
+                range.count = (range.count || 0) + 1;
+            }
+        });
+
         settings.ranges = ranges;
     } else {
         // Categorical Mapping
@@ -3866,7 +3875,7 @@ function renderMapLegend() {
                     <span style="flex: 1; font-weight: 500; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;" title="${label}">${label}</span>
                     <div style="margin-left: auto; text-align: right; line-height: 1.2;">
                         <div style="font-weight: 600; color: #f9fafb;">${count}</div>
-                        <div style="font-size: 9px; color: #9ca3af;">${pct}%</div>
+                        <div style="font-size: 11px; font-weight: 500; color: #d1d5db;">${pct}%</div>
                     </div>
                 </div>`;
             };
