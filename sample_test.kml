@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Test KML</name>
+    <Placemark>
+      <name>Test Point 1</name>
+      <description>This is a test point</description>
+      <Point>
+        <coordinates>-7.5898,33.5731,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Test Point 2</name>
+      <Point>
+        <coordinates>-7.6,33.58,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

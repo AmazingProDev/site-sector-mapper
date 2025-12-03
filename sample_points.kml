@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Sample Points</name>
+    <Placemark>
+      <name>Test Point 1</name>
+      <description>This is a test point.</description>
+      <Style>
+        <IconStyle>
+          <color>ff0000ff</color>
+        </IconStyle>
+      </Style>
+      <Point>
+        <coordinates>-7.6,33.5,0</coordinates>
+      </Point>
+    </Placemark>
+    <Placemark>
+      <name>Test Point 2</name>
+      <description>Another test point.</description>
+      <Style>
+        <IconStyle>
+          <color>ff00ff00</color>
+        </IconStyle>
+      </Style>
+      <Point>
+        <coordinates>-7.61,33.51,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

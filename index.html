@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Sector Mapper - Map & Export Tool</title>
+    <meta name="description"
+        content="Create, manage, and visualize telecom sites with sectors. Import from CSV or Airtable, and export to KML format.">
+
+    <title>Site Sector Mapper</title>
+    <script>
+        window.onerror = function (message, source, lineno, colno, error) {
+            alert('Global Error: ' + message + ' at ' + source + ':' + lineno);
+        };
+    </script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SiteMapper">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/684/684908.png">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css?v=9">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="14" stroke="url(#gradient)" stroke-width="2" />
+                        <path d="M16 8 L24 16 L16 12 L8 16 Z" fill="url(#gradient)" />
+                        <circle cx="16" cy="16" r="3" fill="url(#gradient)" />
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <h1>Site Sector Mapper</h1>
+                </div>
+                <div class="header-actions">
+                    <button id="importSitesBtn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Import Sites
+                    </button>
+                    <button id="exportKmlBtn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export KML
+                    </button>
+                    <button id="importKmlHeaderBtn" class="btn btn-secondary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        Import KML
+                    </button>
+                    <button id="bulkEditBtn" class="btn btn-primary"
+                        style="background-color: #10b981; border-color: #059669;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        Bulk Edit
+                    </button>
+                    <button id="clearAllBtn" class="btn btn-secondary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        Clear All
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar Panel -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Manage Sites</h2>
+                    <div class="site-counter">
+                        <span id="siteCount">0</span> Sites
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="sites-list">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 6h18M3 12h18M3 18h18" />
+                        </svg>
+                        Sites List
+                    </button>
+                    <button class="tab-btn" data-tab="kml-list">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        KML List
+                    </button>
+                    <button class="tab-btn" data-tab="kml">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        KML Import
+                    </button>
+                    <button class="tab-btn" data-tab="points-list">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        Points List
+                    </button>
+                    <button class="tab-btn" data-tab="thematic">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M2 20h20"></path>
+                            <path d="M5 20v-4"></path>
+                            <path d="M9 20v-8"></path>
+                            <path d="M13 20v-12"></path>
+                            <path d="M17 20v-16"></path>
+                        </svg>
+                        Thematic
+                    </button>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="tab-content">
+                    <!-- Sites List Tab -->
+                    <div class="tab-pane active" id="sites-list-tab">
+                        <!-- Import Menu -->
+                        <div id="importMenu" class="import-menu" style="display: none;">
+                            <h3 style="margin-bottom: 1rem;">Choose Import Method</h3>
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <button class="btn btn-primary btn-block import-method-btn" data-method="manual">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                    </svg>
+                                    Manual Entry
+                                </button>
+                                <button class="btn btn-primary btn-block import-method-btn" data-method="csv">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                    </svg>
+                                    CSV Import
+                                </button>
+                                <button class="btn btn-primary btn-block import-method-btn" data-method="airtable">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                    </svg>
+                                    Airtable Import
+                                </button>
+                                <button id="syncToAirtableBtn" class="btn btn-success btn-block"
+                                    style="margin-top: 0.5rem; background-color: #10b981; border-color: #059669;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21.5 2v6h-6M21.5 3l-9 9M2.5 22v-6h6M2.5 21l9-9" />
+                                    </svg>
+                                    Sync All to Airtable
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Manual Entry Form -->
+                        <div id="manualFormContainer" style="display: none;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Manual Entry</h3>
+                                <button id="backFromManualBtn" class="btn btn-secondary btn-sm">← Back</button>
+                            </div>
+                            <form id="manualForm" class="site-form">
+                                <div class="form-group">
+                                    <label for="siteName">Site Name *</label>
+                                    <input type="text" id="siteName" required placeholder="Enter site name">
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="latitude">Latitude *</label>
+                                        <input type="number" id="latitude" step="any" required placeholder="33.5731">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="longitude">Longitude *</label>
+                                        <input type="number" id="longitude" step="any" required placeholder="-7.5898">
+                                    </div>
+                                </div>
+
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="iconShape">Icon Shape</label>
+                                        <select id="iconShape">
+                                            <option value="default">Default (Pin)</option>
+                                            <option value="circle">Circle</option>
+                                            <option value="square">Square</option>
+                                            <option value="triangle">Triangle</option>
+                                            <option value="star">Star</option>
+                                            <option value="diamond">Diamond</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="iconSize">Size (px)</label>
+                                        <input type="number" id="iconSize" value="30" min="10" max="100">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="iconColor">Icon Color</label>
+                                    <div style="display: flex; gap: 10px;">
+                                        <input type="color" id="iconColor" value="#3b82f6"
+                                            style="height: 40px; width: 60px; padding: 0;">
+                                        <input type="text" id="iconColorText" value="#3b82f6" placeholder="#3b82f6"
+                                            style="flex: 1;">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="description">Description</label>
+                                    <textarea id="description" rows="3" placeholder="Optional description"></textarea>
+                                </div>
+
+                                <div class="sectors-section">
+                                    <div class="sectors-header">
+                                        <label>Sectors</label>
+                                        <button type="button" id="addSectorBtn" class="btn-icon">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2">
+                                                <line x1="12" y1="5" x2="12" y2="19" />
+                                                <line x1="5" y1="12" x2="19" y2="12" />
+                                            </svg>
+                                            Add Sector
+                                        </button>
+                                    </div>
+                                    <div id="sectorsContainer" class="sectors-container">
+                                        <!-- Sectors will be added dynamically -->
+                                    </div>
+                                </div>
+
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary btn-block">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M12 5v14M5 12l7 7 7-7" />
+                                        </svg>
+                                        Add Site
+                                    </button>
+                                    <button type="button" id="cancelEditBtn" class="btn btn-secondary btn-block"
+                                        style="display: none;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18" />
+                                            <line x1="6" y1="6" x2="18" y2="18" />
+                                        </svg>
+                                        Cancel Edit
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- CSV Import Form -->
+                        <div id="csvFormContainer" style="display: none;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>CSV Import</h3>
+                                <button id="backFromCsvBtn" class="btn btn-secondary btn-sm">← Back</button>
+                            </div>
+                            <div class="upload-section">
+                                <div id="dropZone" class="drop-zone">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="1.5">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <polyline points="14 2 14 8 20 8" />
+                                        <line x1="12" y1="18" x2="12" y2="12" />
+                                        <line x1="9" y1="15" x2="15" y2="15" />
+                                    </svg>
+                                    <p class="drop-text">Drag & drop CSV file here</p>
+                                    <p class="drop-subtext">or</p>
+                                    <button type="button" class="btn btn-secondary" id="selectFileBtn">Browse
+                                        Files</button>
+                                    <input type="file" id="csvFileInput" accept=".csv" hidden
+                                        aria-label="Upload CSV File">
+                                </div>
+
+                                <div class="csv-info">
+                                    <h3>CSV Format</h3>
+                                    <p>Your CSV should have the following columns:</p>
+                                    <code>site_name,latitude,longitude,description,azimuth,beamwidth,range</code>
+                                    <p class="csv-note">Multiple sectors: Add rows with the same site_name but different
+                                        sector values.</p>
+                                </div>
+
+                                <div id="csvPreview" class="csv-preview" style="display: none;">
+                                    <h3>Preview</h3>
+                                    <div id="csvPreviewContent"></div>
+                                    <div class="preview-actions">
+                                        <button id="importCsvBtn" class="btn btn-primary">Import Sites</button>
+                                        <button id="cancelCsvBtn" class="btn btn-secondary">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Airtable Import Form -->
+                        <div id="airtableFormContainer" style="display: none;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Airtable Import</h3>
+                                <button id="backFromAirtableBtn" class="btn btn-secondary btn-sm">← Back</button>
+                            </div>
+                            <div class="airtable-section">
+                                <div class="form-group">
+                                    <label for="airtableApiKey">API Key / Personal Access Token</label>
+                                    <input type="password" id="airtableApiKey"
+                                        placeholder="Enter your Airtable API key">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="airtableBaseId">Base ID</label>
+                                    <input type="text" id="airtableBaseId" placeholder="appXXXXXXXXXXXXXX">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="airtableTableName">Table Name</label>
+                                    <input type="text" id="airtableTableName" placeholder="Sites">
+                                </div>
+
+                                <button id="connectAirtableBtn" class="btn btn-primary btn-block">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path
+                                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                    </svg>
+                                    Fetch from Airtable
+                                </button>
+
+                                <div id="airtableStatus" class="status-message" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KML Import Tab -->
+                    <div class="tab-pane" id="kml-tab">
+                        <div class="upload-section">
+                            <div id="kmlDropZone" class="drop-zone">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1.5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                <p class="drop-text">Drag & drop KML file here</p>
+                                <p class="drop-subtext">or</p>
+                                <button type="button" class="btn btn-secondary" id="selectKmlFileBtn">Browse
+                                    Files</button>
+                                <input type="file" id="kmlFileInput" accept=".kml,.xml" hidden
+                                    aria-label="Upload KML File">
+                            </div>
+
+                            <div class="csv-info">
+                                <h3>KML Support</h3>
+                                <p>Supports KML files with Placemarks containing Points.</p>
+                                <p class="csv-note">Styles (color, scale) will be imported if available.</p>
+                            </div>
+
+                            <div id="kmlPreview" class="csv-preview" style="display: none;">
+                                <h3>Preview</h3>
+                                <div id="kmlPreviewContent"></div>
+                                <div class="preview-actions">
+                                    <button id="importKmlBtn" class="btn btn-primary" type="button">Import KML</button>
+                                    <button id="debugImportBtn" class="btn btn-warning" type="button"
+                                        onclick="console.log('Debug click'); importKmlData()">Debug Import</button>
+                                    <button id="cancelKmlBtn" class="btn btn-secondary" type="button">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KML List Tab -->
+                    <div class="tab-pane" id="kml-list-tab">
+                        <div class="sites-list-header">
+                            <h3>KML List <span id="kmlTotalCount"
+                                    style="font-size: 0.8em; color: var(--text-muted);"></span></h3>
+                            <div style="display: flex; gap: 5px;">
+                                <input type="text" id="searchKmlList" class="search-input" placeholder="Search KML..."
+                                    style="margin-bottom: 0;">
+                                <button id="analyzeKmlBtn" class="btn btn-sm btn-primary" title="Analyze Map"
+                                    style="background-color: #8b5cf6; border-color: #7c3aed;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                </button>
+                                <button id="clearKmlDataBtn" class="btn btn-sm btn-secondary" title="Clear All KML Data"
+                                    style="color: var(--error); border-color: var(--error);">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path
+                                            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                        </path>
+                                    </svg>
+                                </button>
+                                <button id="exportAttributesBtn" class="btn btn-sm btn-primary"
+                                    title="Export Attributes to CSV"
+                                    style="background-color: #10b981; border-color: #059669;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="kmlListContainer" class="sites-list-container">
+                            <!-- KML Groups will be added here -->
+                        </div>
+                    </div>
+
+                    <!-- Points List Tab -->
+                    <div class="tab-pane" id="points-list-tab">
+                        <div class="sites-list-header">
+                            <h3>Points List</h3>
+                            <input type="text" id="searchPointsList" class="search-input"
+                                placeholder="Search points...">
+                        </div>
+                        <div id="pointsListContainer" class="sites-list-container">
+                            <!-- Points will be added here -->
+                        </div>
+                    </div>
+
+                    <!-- Thematic Analysis Tab -->
+                    <div class="tab-pane" id="thematic-tab">
+                        <div class="thematic-section">
+                            <h3>Thematic Analysis</h3>
+                            <p class="text-muted" style="margin-bottom: 1rem;">Color-code map sectors based on
+                                attributes.</p>
+                            <div class="thematic-controls">
+                                <!-- Site Sectors Section -->
+                                <div class="analysis-section"
+                                    style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">Site Sectors Analysis
+                                    </h4>
+                                    <div class="form-group">
+                                        <label for="siteAttribute">Select Attribute</label>
+                                        <select id="siteAttribute" class="form-control">
+                                            <option value="n_a">N#A</option>
+                                            <option value="technology">Technology</option>
+                                            <option value="frequency">Frequency</option>
+                                            <option value="azimuth">Azimuth</option>
+                                            <option value="beamwidth">Beamwidth</option>
+                                            <option value="range">Range</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- KML Points Section -->
+                                <div class="analysis-section" style="margin-bottom: 1rem;">
+                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">KML Points Analysis
+                                    </h4>
+                                    <div class="form-group">
+                                        <label for="kmlAttribute">Select Attribute</label>
+                                        <select id="kmlAttribute" class="form-control">
+                                            <option value="n_a">N#A</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-actions" style="margin-top: 1rem;">
+                                    <button id="applyThematicBtn" class="btn btn-primary btn-block">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <path d="M2 12h20M2 12l5-5m-5 5l5 5" />
+                                        </svg>
+                                        Analyze Map
+                                    </button>
+                                    <button id="clearThematicBtn" class="btn btn-secondary btn-block"
+                                        style="margin-top: 0.5rem;">
+                                        Clear Analysis
+                                    </button>
+                                </div>
+
+                                <div id="thematicLegend" class="thematic-legend"
+                                    style="display: none; margin-top: 1.5rem;">
+                                    <h4>Legend</h4>
+                                    <div id="legendContent"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sites List (Only visible in Manual/CSV/Airtable tabs - handled via CSS or JS? Actually, let's keep it simple and just toggle visibility based on tab) -->
+                        <!-- Wait, the existing Sites List is outside the tab-content. I should probably move it into the manual/csv/airtable tabs OR make it a separate section. 
+                     The user wants a "Points List like Sites List". 
+                     Let's make the "Sites List" visible for Manual/CSV/Airtable, and "Points List" for Points tab.
+                -->
+
+                        <!-- Sites List -->
+                        <!-- Sites List (Visible for Manual, CSV, Airtable) -->
+                        <div id="sitesListSection" class="sites-list">
+                            <div class="sites-list-header">
+                                <h3>Sites List</h3>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="text" id="searchSites" class="search-input"
+                                        placeholder="Search sites..." style="margin-bottom: 0;">
+                                    <button id="analyzeSitesBtn" class="btn btn-sm btn-primary" title="Analyze Map"
+                                        style="background-color: #8b5cf6; border-color: #7c3aed;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <circle cx="11" cy="11" r="8"></circle>
+                                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="sitesListContainer" class="sites-list-container">
+                                <div class="empty-state">
+                                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="1">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                        <circle cx="12" cy="10" r="3" />
+                                    </svg>
+                                    <p>No sites added yet</p>
+                                    <p class="empty-subtext">Add sites manually, import from CSV, or connect to Airtable
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+            </aside>
+
+            <!-- Map Container -->
+            <main class="map-container">
+                <div id="map"></div>
+                <div class="map-controls">
+                    <div class="map-control-group">
+                        <button class="map-control-btn" id="addMarkerBtn" title="Click to Add Marker">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                                <line x1="12" y1="5" x2="12" y2="15"></line>
+                                <line x1="7" y1="10" x2="17" y2="10"></line>
+                            </svg>
+                        </button>
+                        <button class="map-control-btn" id="measureBtn" title="Measure Distance">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M2 12h20"></path>
+                                <path d="M2 12l5-5"></path>
+                                <path d="M2 12l5 5"></path>
+                                <path d="M22 12l-5-5"></path>
+                                <path d="M22 12l-5 5"></path>
+                            </svg>
+                        </button>
+                        <button class="map-control-btn" id="clearMeasureBtn" title="Clear Measurements">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
+                            </svg>
+                        </button>
+                        <button id="toggleSiteNamesBtn" class="map-control-btn active" title="Toggle Site Names">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            <span class="control-label">Site Names</span>
+                        </button>
+                        <button id="toggleSectorNamesBtn" class="map-control-btn active" title="Toggle Sector Names">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M2 12h20" />
+                                <path d="M12 2v20" />
+                                <path d="M12 12l5-5" />
+                                <path d="M12 12l5 5" />
+                            </svg>
+                            <span class="control-label">Sector Names</span>
+                        </button>
+                    </div>
+                    <button id="centerMapBtn" class="map-control-btn" title="Center Map">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="3" />
+                            <line x1="12" y1="1" x2="12" y2="3" />
+                            <line x1="12" y1="21" x2="12" y2="23" />
+                            <line x1="1" y1="12" x2="3" y2="12" />
+                            <line x1="21" y1="12" x2="23" y2="12" />
+                        </svg>
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal for Site Details -->
+    <div id="siteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalSiteName">Site Details</h2>
+                <button class="modal-close" id="modalCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Export Options -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Export Options</h2>
+                <button class="modal-close" id="exportModalCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Choose what you want to include in the KML file:</p>
+                <div class="export-options">
+                    <button id="exportSitesOnlyBtn" class="btn btn-secondary btn-block" style="margin-bottom: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        Sites Only (Points)
+                    </button>
+                    <button id="exportFullBtn" class="btn btn-primary btn-block">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        Sites & Sectors (Polygons)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Bulk Edit -->
+    <div id="bulkEditModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Bulk Edit Sectors</h2>
+                <button class="modal-close" id="bulkEditModalCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Update settings for <strong>ALL</strong> sectors in all sites.</p>
+                <form id="bulkEditForm">
+                    <div class="form-group">
+                        <label for="bulkBeamwidth">Beamwidth (°)</label>
+                        <input type="number" id="bulkBeamwidth" min="1" max="360"
+                            placeholder="Leave empty to keep current">
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkRange">Range (m)</label>
+                        <input type="number" id="bulkRange" min="1" placeholder="Leave empty to keep current">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-block">Apply to All</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- Point Modal -->
+    <div id="editSiteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="editSiteTitle">Add Point</h2>
+                <button class="close-btn" onclick="closePointModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editSiteForm">
+                    <div class="form-group">
+                        <label for="editSiteName">Name *</label>
+                        <input type="text" id="editSiteName" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editSiteLat">Latitude *</label>
+                            <input type="number" id="editSiteLat" step="any" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editSiteLng">Longitude *</label>
+                            <input type="number" id="editSiteLng" step="any" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="pointShape">Icon Shape</label>
+                            <select id="pointShape">
+                                <option value="circle">Circle</option>
+                                <option value="square">Square</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="star">Star</option>
+                                <option value="diamond">Diamond</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pointSize">Size (px)</label>
+                            <input type="number" id="pointSize" value="30" min="10" max="100">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="pointColor">Icon Color</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="color" id="pointColor" value="#ef4444"
+                                style="height: 40px; width: 60px; padding: 0;">
+                            <input type="text" id="pointColorText" value="#ef4444" placeholder="#ef4444"
+                                style="flex: 1;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editSiteDescription">Description</label>
+                        <textarea id="editSiteDescription" rows="3"></textarea>
+                    </div>
+
+                    <div id="customPropertiesSection"
+                        style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                        <label style="display: block; margin-bottom: 5px;">Custom Properties</label>
+                        <div id="customPropertiesContainer">
+                            <!-- Custom properties will be added here -->
+                        </div>
+                        <button type="button" id="addPropertyBtn" class="btn btn-secondary"
+                            style="width: 100%; margin-top: 5px; font-size: 0.9em;">
+                            + Add Property
+                        </button>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closePointModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Point</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="style.css?v=14">
+    <script src="app.js?v=89"></script>
+</body>
+
+</html>

@@ -1,0 +1,12 @@
+site_name,latitude,longitude,description,azimuth,beamwidth,range,technology,frequency
+Casa Tower 1,33.5731,-7.5898,Main tower in Casablanca,0,65,500,5G,3500 MHz
+Casa Tower 1,33.5731,-7.5898,Main tower in Casablanca,120,65,500,5G,3500 MHz
+Casa Tower 1,33.5731,-7.5898,Main tower in Casablanca,240,65,500,5G,3500 MHz
+Rabat Site A,34.0209,-6.8416,Coverage for city center,45,80,800,4G,2100 MHz
+Rabat Site A,34.0209,-6.8416,Coverage for city center,180,80,800,4G,2100 MHz
+Marrakech Tower,31.6295,-7.9811,Tourist area coverage,90,70,600,5G,2600 MHz
+Marrakech Tower,31.6295,-7.9811,Tourist area coverage,270,70,600,4G,1800 MHz
+Fes Station,34.0181,-5.0078,Historical district,0,90,700,4G,2100 MHz
+Tangier Coastal,35.7595,-5.8340,Port area coverage,60,65,1000,5G,3500 MHz
+Tangier Coastal,35.7595,-5.8340,Port area coverage,150,65,1000,5G,3500 MHz
+Tangier Coastal,35.7595,-5.8340,Port area coverage,240,65,1000,4G,2600 MHz

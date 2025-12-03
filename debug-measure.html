@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Measure Tool Debug</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border: 2px solid #333;
+            margin-top: 10px;
+        }
+
+        #log {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button.active {
+            background: #f59e0b;
+            color: white;
+        }
+
+        /* Measure Tool Styles */
+        .measure-popup .leaflet-popup-content-wrapper {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
+            border: 2px solid #f59e0b;
+            border-radius: 12px;
+            padding: 0;
+        }
+
+        .measure-popup .leaflet-popup-tip {
+            background: #f59e0b;
+        }
+
+        .measure-popup .leaflet-popup-content {
+            margin: 10px 16px !important;
+            font-size: 1.2rem !important;
+            font-weight: 700 !important;
+            color: #f59e0b !important;
+            text-align: center;
+        }
+
+        .measure-temp-marker {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.5;
+                transform: scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Measure Tool Debug</h1>
+    <div>
+        <button id="measureBtn">Toggle Measure Mode</button>
+        <button id="clearLog">Clear Log</button>
+    </div>
+    <div id="map"></div>
+    <div id="log">Log will appear here...</div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let isMeasuring = false;
+        let map;
+        let measureLayer;
+        let measurePoints = [];
+        let tempMeasureMarker = null;
+        const logEl = document.getElementById('log');
+
+        function log(msg) {
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${msg}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(msg);
+        }
+
+        // Initialize map
+        log('Initializing map...');
+        map = L.map('map').setView([33.5731, -7.5898], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        log('Map initialized');
+
+        // Measure button
+        document.getElementById('measureBtn').addEventListener('click', () => {
+            isMeasuring = !isMeasuring;
+            const btn = document.getElementById('measureBtn');
+
+            if (isMeasuring) {
+                btn.classList.add('active');
+                map.getContainer().style.cursor = 'crosshair';
+                log('✓ Measure Mode ENABLED');
+
+                if (!measureLayer) {
+                    measureLayer = L.layerGroup().addTo(map);
+                    log('  Created measureLayer');
+                }
+                measurePoints = [];
+            } else {
+                btn.classList.remove('active');
+                map.getContainer().style.cursor = '';
+                log('✗ Measure Mode DISABLED');
+                if (measureLayer) measureLayer.clearLayers();
+                measurePoints = [];
+                tempMeasureMarker = null;
+            }
+        });
+
+        document.getElementById('clearLog').addEventListener('click', () => {
+            logEl.innerHTML = 'Log cleared<br>';
+        });
+
+        // Map click handler
+        map.on('click', (e) => {
+            if (isMeasuring) {
+                handleMeasureClick(e.latlng);
+            } else {
+                log('Map clicked (not measuring)');
+            }
+        });
+
+        function handleMeasureClick(latlng) {
+            try {
+                log(`📍 Click at ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`);
+
+                if (measurePoints.length >= 2) {
+                    measurePoints = [];
+                    log('  Resetting points for new measurement');
+                }
+
+                measurePoints.push(latlng);
+                log(`  Points count: ${measurePoints.length}`);
+
+                // First point
+                if (measurePoints.length === 1) {
+                    tempMeasureMarker = L.circleMarker(latlng, {
+                        radius: 5,
+                        color: '#f59e0b',
+                        fillColor: '#f59e0b',
+                        fillOpacity: 1,
+                        className: 'measure-temp-marker',
+                        interactive: false
+                    }).addTo(measureLayer);
+                    log('  Placed first point marker');
+                }
+
+                // Second point - Finish
+                if (measurePoints.length === 2) {
+                    log('  Finishing measurement...');
+                    if (tempMeasureMarker) {
+                        measureLayer.removeLayer(tempMeasureMarker);
+                        tempMeasureMarker = null;
+                    }
+
+                    const measurementGroup = L.featureGroup().addTo(measureLayer);
+
+                    // Add markers
+                    measurePoints.forEach(pt => {
+                        L.circleMarker(pt, {
+                            radius: 5,
+                            color: '#f59e0b',
+                            fillColor: '#f59e0b',
+                            fillOpacity: 1
+                        }).addTo(measurementGroup);
+                    });
+
+                    // Draw line
+                    const polyline = L.polyline(measurePoints, {
+                        color: '#f59e0b',
+                        weight: 3,
+                        dashArray: '10, 10'
+                    }).addTo(measurementGroup);
+
+                    const distance = measurePoints[0].distanceTo(measurePoints[1]);
+                    const center = polyline.getCenter();
+                    log(`  Distance: ${Math.round(distance)} m`);
+
+                    // Popup
+                    const popup = L.popup({
+                        closeButton: false,
+                        autoClose: false,
+                        closeOnClick: false,
+                        className: 'measure-popup'
+                    })
+                        .setLatLng(center)
+                        .setContent(`<div>${Math.round(distance)} m</div>`); // Fixed HTML
+
+                    measurementGroup.bindPopup(popup).openPopup();
+
+                    measurePoints = [];
+                }
+            } catch (err) {
+                log(`❌ Error: ${err.message}`);
+                console.error(err);
+            }
+        }
+
+        log('Ready! Click "Toggle Measure Mode" then click two points on the map.');
+    </script>
+</body>
+
+</html>
