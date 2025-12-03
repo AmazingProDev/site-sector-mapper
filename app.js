@@ -291,7 +291,7 @@ function initializeEventListeners() {
     document.getElementById('bulkEditForm').addEventListener('submit', handleBulkEditSubmit);
 
     // Point Modal
-    // document.getElementById('pointForm').addEventListener('submit', handlePointSubmit); // Removed as we use editSiteForm now
+    document.getElementById('editSiteForm').addEventListener('submit', handleEditSiteSubmit);
     // document.getElementById('pointModalCloseBtn').addEventListener('click', closePointModal);
 
     // Add Marker Button
@@ -835,7 +835,7 @@ function handleBulkEditSubmit(e) {
 
     saveToLocalStorage();
     updateUI();
-    updateMapMarkers();
+    updateMapMarkers({ fitBounds: false });
 
     document.getElementById('bulkEditModal').style.display = 'none';
     document.getElementById('bulkEditForm').reset();
@@ -2836,6 +2836,7 @@ function showSiteDetails(site) {
 }
 
 function closeModal() {
+    console.log('closeModal called');
     const siteModal = document.getElementById('siteModal');
     if (siteModal) siteModal.classList.remove('active');
 
@@ -2844,13 +2845,109 @@ function closeModal() {
 
     editingId = null;
     editingPointId = null;
+    editingType = null;
 }
 
 function cancelEdit() {
     closeModal();
 }
 
+async function handleEditSiteSubmit(e) {
+    e.preventDefault();
+    console.log('handleEditSiteSubmit called. editingPointId:', editingPointId, 'editingType:', editingType);
+
+    try {
+        const name = document.getElementById('editSiteName').value;
+        const lat = parseFloat(document.getElementById('editSiteLat').value);
+        const lng = parseFloat(document.getElementById('editSiteLng').value);
+        const description = document.getElementById('editSiteDescription').value;
+
+        if (!name || isNaN(lat) || isNaN(lng)) {
+            showNotification('Please fill in all required fields', 'error');
+            return;
+        }
+
+        if (editingType === 'site') {
+            // Update Site
+            const siteIndex = sites.findIndex(s => s.id === editingPointId);
+            if (siteIndex !== -1) {
+                sites[siteIndex] = {
+                    ...sites[siteIndex],
+                    name,
+                    latitude: lat,
+                    longitude: lng,
+                    description
+                };
+                showNotification('Site updated', 'success');
+            }
+        } else {
+            // Update or Create Point
+            const shape = document.getElementById('pointShape').value;
+            const size = parseInt(document.getElementById('pointSize').value);
+            const color = document.getElementById('pointColor').value;
+
+            // Collect Custom Properties
+            const customProperties = [];
+            document.querySelectorAll('.custom-property-row').forEach(row => {
+                const propName = row.querySelector('.property-name').value;
+                const propValue = row.querySelector('.property-value').value;
+                if (propName) {
+                    customProperties.push({ name: propName, value: propValue });
+                }
+            });
+
+            if (editingPointId) {
+                // Update Point
+                console.log('Updating existing point:', editingPointId);
+                const pointIndex = points.findIndex(p => p.id === editingPointId);
+                if (pointIndex !== -1) {
+                    points[pointIndex] = {
+                        ...points[pointIndex],
+                        name,
+                        latitude: lat,
+                        longitude: lng,
+                        description,
+                        shape,
+                        size,
+                        color,
+                        customProperties
+                    };
+                    showNotification('Point updated', 'success');
+                } else {
+                    console.error('Point not found for update:', editingPointId);
+                }
+            } else {
+                // Create New Point
+                console.log('Creating new point');
+                const newPoint = {
+                    id: Date.now().toString(),
+                    type: 'point', // Distinguish from KML points if needed
+                    name,
+                    latitude: lat,
+                    longitude: lng,
+                    description,
+                    shape,
+                    size,
+                    color,
+                    customProperties
+                };
+                points.push(newPoint);
+                showNotification('Point created', 'success');
+            }
+        }
+
+        saveToLocalStorage();
+        updateMapMarkers({ fitBounds: false });
+        renderPointsList(); // Update points list if needed
+        closeModal();
+    } catch (error) {
+        console.error('Error in handleEditSiteSubmit:', error);
+        showNotification('Error saving point: ' + error.message, 'error');
+    }
+}
+
 function openPointModal(pointId = null, lat = null, lng = null) {
+    console.log('openPointModal called. pointId:', pointId);
     const modal = document.getElementById('editSiteModal');
     const form = document.getElementById('editSiteForm');
     const title = document.getElementById('editSiteTitle');
@@ -2865,6 +2962,7 @@ function openPointModal(pointId = null, lat = null, lng = null) {
         if (point) {
             editingPointId = pointId;
             editingType = 'point';
+            console.log('Editing mode set. editingPointId:', editingPointId);
             title.textContent = 'Edit Point';
             document.getElementById('editSiteName').value = point.name;
             document.getElementById('editSiteLat').value = point.latitude;
@@ -2879,11 +2977,14 @@ function openPointModal(pointId = null, lat = null, lng = null) {
             if (point.customProperties) {
                 point.customProperties.forEach(prop => addCustomPropertyField(prop.name, prop.value));
             }
+        } else {
+            console.error('Point not found in openPointModal:', pointId);
         }
     } else {
         // Add new point
         editingPointId = null;
         editingType = 'point';
+        console.log('Create mode set.');
         title.textContent = 'Add Point';
         if (lat && lng) {
             document.getElementById('editSiteLat').value = lat;
@@ -2895,6 +2996,7 @@ function openPointModal(pointId = null, lat = null, lng = null) {
 }
 
 function closePointModal() {
+    console.log('closePointModal called');
     const modal = document.getElementById('editSiteModal');
     if (modal) modal.classList.remove('active');
     editingPointId = null;
@@ -2985,7 +3087,7 @@ async function deleteSite(id) {
             sites = sites.filter(s => s.id !== id);
             saveToLocalStorage();
             updateUI();
-            updateMapMarkers();
+            updateMapMarkers({ fitBounds: false });
             closeModal();
             showNotification('Site deleted successfully', 'success');
         } else {
@@ -2996,7 +3098,7 @@ async function deleteSite(id) {
                 sites = sites.filter(s => s.id !== id);
                 saveToLocalStorage();
                 updateUI();
-                updateMapMarkers();
+                updateMapMarkers({ fitBounds: false });
                 closeModal();
                 showNotification('Site deleted locally (Airtable failed)', 'warning');
             }
@@ -3267,7 +3369,7 @@ function addPropertyRow(name = '', value = '') {
     container.appendChild(row);
 }
 
-document.getElementById('addPropertyBtn').addEventListener('click', () => addPropertyRow());
+document.getElementById('addPropertyBtn').addEventListener('click', () => addCustomPropertyField());
 
 // Close Modal
 function closePointModal() {
@@ -3277,78 +3379,7 @@ function closePointModal() {
 }
 
 // Save Changes
-// Save Changes
-const editSiteForm = document.getElementById('editSiteForm');
-if (editSiteForm) {
-    editSiteForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        saveSiteChanges();
-    });
-}
 
-function saveSiteChanges() {
-    const name = document.getElementById('editSiteName').value;
-    const lat = parseFloat(document.getElementById('editSiteLat').value);
-    const lng = parseFloat(document.getElementById('editSiteLng').value);
-    const description = document.getElementById('editSiteDescription').value;
-    const shape = document.getElementById('pointShape').value;
-    const size = parseInt(document.getElementById('pointSize').value);
-    const color = document.getElementById('pointColor').value;
-
-    // Collect custom properties
-    const customProperties = [];
-    document.querySelectorAll('.custom-property-row').forEach(row => {
-        const propName = row.querySelector('.property-name').value;
-        const propValue = row.querySelector('.property-value').value;
-        if (propName && propValue) {
-            customProperties.push({ name: propName, value: propValue });
-        }
-    });
-
-    if (editingType === 'point') {
-        if (editingPointId) {
-            // Update existing point
-            const point = points.find(p => p.id === editingPointId);
-            if (point) {
-                point.name = name;
-                point.latitude = lat;
-                point.longitude = lng;
-                point.description = description;
-                point.shape = shape;
-                point.size = size;
-                point.color = color;
-                point.customProperties = customProperties;
-                showNotification('Point updated successfully', 'success');
-            }
-        } else {
-            // Create new point
-            const newPoint = {
-                id: Date.now().toString(),
-                type: 'point', // Distinguish from 'kml_point'
-                name: name,
-                latitude: lat,
-                longitude: lng,
-                description: description,
-                shape: shape,
-                size: size,
-                color: color,
-                customProperties: customProperties,
-                visible: true
-            };
-            points.push(newPoint);
-            showNotification('Point added successfully', 'success');
-        }
-
-        saveToLocalStorage();
-        updateMapMarkers({ fitBounds: false });
-        renderPointsList();
-        closePointModal();
-    } else {
-        // Handle Site editing if needed in future
-        console.warn('Saving sites not fully implemented in this modal yet');
-        closePointModal();
-    }
-}
 
 
 
@@ -3359,7 +3390,7 @@ async function deletePoint(pointId) {
 
         points = points.filter(p => p.id != pointId);
         saveToLocalStorage();
-        updateMapMarkers();
+        updateMapMarkers({ fitBounds: false });
         updateUI();
         renderPointsList();
         showNotification('Point deleted', 'success');
