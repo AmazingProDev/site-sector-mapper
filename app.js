@@ -71,9 +71,35 @@ function init() {
 function initializeMap() {
     // Initialize Leaflet map
     // Initialize Leaflet map with Canvas renderer for performance
+    // Load saved map state
+    const savedState = localStorage.getItem('siteSectorMapper_mapState');
+    let initialCenter = [33.5731, -7.5898]; // Morocco center
+    let initialZoom = 6;
+
+    if (savedState) {
+        try {
+            const state = JSON.parse(savedState);
+            if (state.center && state.zoom) {
+                initialCenter = state.center;
+                initialZoom = state.zoom;
+            }
+        } catch (e) {
+            console.error('Error loading map state:', e);
+        }
+    }
+
     map = L.map('map', {
         preferCanvas: true
-    }).setView([33.5731, -7.5898], 6); // Morocco center
+    }).setView(initialCenter, initialZoom);
+
+    // Save map state on move/zoom
+    map.on('moveend zoomend', () => {
+        const state = {
+            center: map.getCenter(),
+            zoom: map.getZoom()
+        };
+        localStorage.setItem('siteSectorMapper_mapState', JSON.stringify(state));
+    });
 
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -3189,8 +3215,34 @@ function loadFromLocalStorage() {
             console.error('Error loading points:', e);
         }
     }
-    updateMapMarkers();
+    updateMapMarkers({ fitBounds: false });
+    updateMapMarkers({ fitBounds: false });
+    loadThematicSettings();
+}
+
+function loadThematicSettings() {
+    // Always populate attributes first
     updateThematicAttributes();
+
+    const savedSettings = localStorage.getItem('siteSectorMapper_thematicSettings');
+    if (savedSettings) {
+        try {
+            const settings = JSON.parse(savedSettings);
+            if (settings.siteAttribute) {
+                document.getElementById('siteAttribute').value = settings.siteAttribute;
+            }
+            if (settings.kmlAttribute) {
+                document.getElementById('kmlAttribute').value = settings.kmlAttribute;
+            }
+
+            // Apply if either is set
+            if (settings.siteAttribute !== 'n_a' || settings.kmlAttribute !== 'n_a') {
+                applyThematicAnalysis();
+            }
+        } catch (e) {
+            console.error('Error loading thematic settings:', e);
+        }
+    }
 }
 
 function showNotification(message, type = 'success') {
@@ -3693,6 +3745,12 @@ function applyThematicAnalysis() {
     } else {
         showNotification('Analysis cleared (N#A selected for both)', 'info');
     }
+
+    // Save settings to localStorage
+    localStorage.setItem('siteSectorMapper_thematicSettings', JSON.stringify({
+        siteAttribute,
+        kmlAttribute
+    }));
 }
 
 function generateThematicSettings(source, attribute) {
