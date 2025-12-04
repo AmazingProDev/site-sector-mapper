@@ -92,14 +92,33 @@ function initializeMap() {
         preferCanvas: true
     }).setView(initialCenter, initialZoom);
 
-    // Save map state on move/zoom
+    // Save map state and update zoom classes on move/zoom
+    function updateZoomClasses() {
+        const zoom = map.getZoom();
+        const mapContainer = document.getElementById('map');
+
+        mapContainer.classList.remove('zoom-level-low', 'zoom-level-medium', 'zoom-level-high');
+
+        if (zoom < 10) {
+            mapContainer.classList.add('zoom-level-low');
+        } else if (zoom >= 10 && zoom < 14) {
+            mapContainer.classList.add('zoom-level-medium');
+        } else {
+            mapContainer.classList.add('zoom-level-high');
+        }
+    }
+
     map.on('moveend zoomend', () => {
         const state = {
             center: map.getCenter(),
             zoom: map.getZoom()
         };
         localStorage.setItem('siteSectorMapper_mapState', JSON.stringify(state));
+        updateZoomClasses();
     });
+
+    // Initial call
+    updateZoomClasses();
 
     // Add tile layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -3336,6 +3355,40 @@ function createCustomIcon(site, overrideColor = null) {
             break;
         case 'diamond':
             svgShape = `<path d="M12 2L2 12l10 10 10-10L12 2z" />`;
+            break;
+        case '3d-sphere':
+            // Sphere with radial gradient
+            svgShape = `
+                <defs>
+                    <radialGradient id="grad-sphere-${color}" cx="30%" cy="30%" r="70%">
+                        <stop offset="0%" style="stop-color: #fff; stop-opacity: 0.5" />
+                        <stop offset="100%" style="stop-color: ${color}; stop-opacity: 1" />
+                    </radialGradient>
+                </defs>
+                <circle cx="12" cy="12" r="10" fill="url(#grad-sphere-${color})" stroke="none" />
+                <circle cx="12" cy="12" r="10" fill="${color}" stroke="none" style="mix-blend-mode: multiply; opacity: 0.3;" />
+            `;
+            break;
+        case '3d-cube':
+            // Isometric cube
+            // Top face (lighter)
+            // Right face (darker)
+            // Left face (base color)
+            svgShape = `
+                <path d="M12 2 L22 7 L12 12 L2 7 Z" fill="${color}" style="filter: brightness(1.3);" stroke="none"/>
+                <path d="M22 7 L22 17 L12 22 L12 12 Z" fill="${color}" style="filter: brightness(0.7);" stroke="none"/>
+                <path d="M2 7 L12 12 L12 22 L2 17 Z" fill="${color}" stroke="none"/>
+            `;
+            break;
+        case '3d-cylinder':
+            // Cylinder
+            // Top ellipse (lighter)
+            // Side body (gradient or solid)
+            svgShape = `
+                <path d="M2 7 L2 17 Q12 22 22 17 L22 7" fill="${color}" stroke="none"/>
+                <ellipse cx="12" cy="7" rx="10" ry="3" fill="${color}" style="filter: brightness(1.3);" stroke="none"/>
+                <path d="M2 7 Q12 12 22 7" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+            `;
             break;
     }
 

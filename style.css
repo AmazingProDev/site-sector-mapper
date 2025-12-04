@@ -694,11 +694,28 @@ body {
     pointer-events: auto;
     z-index: 1000;
     cursor: pointer;
+    transition: all 0.3s ease;
 }
 
 .site-marker-label:hover {
     transform: scale(1.05);
     background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Zoom Level Adjustments */
+.zoom-level-low .custom-site-marker svg {
+    transform: scale(1.5); /* Make points bigger when zoomed out */
+    transition: transform 0.3s ease;
+}
+
+.zoom-level-low .site-marker-label {
+    opacity: 0; /* Hide labels when zoomed out */
+    pointer-events: none;
+}
+
+.zoom-level-medium .site-marker-label {
+    font-size: 11px; /* Smaller labels at medium zoom */
+    padding: 1px 4px;
 }
 
 /* Sector Labels */
