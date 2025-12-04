@@ -3635,7 +3635,7 @@ function updateThematicAttributes() {
 
 
 function getPointColor(point) {
-    if (activeThematicSettings.kml) {
+    if (activeThematicSettings.kml && point.type === 'kml_point') {
         const settings = activeThematicSettings.kml;
         let val;
         if (settings.isCustom) {
