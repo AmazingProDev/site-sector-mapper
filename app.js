@@ -26,6 +26,7 @@ let editingType = null; // 'site' or 'point'
 let hiddenKmlGroups = new Set(); // Track hidden KML groups
 let hiddenSiteGroups = new Set(); // Track hidden Site groups
 let activeThematicSettings = { sites: null, kml: null }; // Independent settings for Sites and KML
+let alarmsData = []; // Store imported alarm data
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -140,6 +141,127 @@ function initializeMap() {
     // Initialize sectors layer
     sectorsLayer = L.layerGroup();
     map.addLayer(sectorsLayer);
+
+    // Initialize Draw Controls
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+        draw: {
+            polyline: false,
+            circle: false,
+            marker: false,
+            circlemarker: false,
+            polygon: {
+                allowIntersection: false,
+                showArea: true
+            },
+            rectangle: {
+                showArea: true
+            }
+        },
+        edit: {
+            featureGroup: drawnItems,
+            remove: true,
+            edit: false
+        }
+    });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+        const type = e.layerType;
+        const layer = e.layer;
+
+        // Clear previous selection
+        drawnItems.clearLayers();
+        drawnItems.addLayer(layer);
+
+        handleSelection(layer);
+    });
+
+    map.on(L.Draw.Event.DELETED, function (e) {
+        // Clear selection when shape is deleted
+        console.log('Selection cleared');
+        // Restore all points
+        updateMapMarkers({ fitBounds: false });
+        showNotification('Selection cleared. All points visible.', 'info');
+    });
+}
+
+function handleSelection(layer) {
+    const selectedSites = [];
+    const selectedPoints = [];
+
+    // Helper to check if point is in polygon/rectangle
+    // Leaflet Draw layers (Polygon/Rectangle) have .getBounds() and .contains() (for Rectangle)
+    // For Polygon, we can use ray casting or a library function. 
+    // Fortunately, we can use a simple point-in-polygon check.
+
+    // Get GeoJSON to make it standard
+    const geoJson = layer.toGeoJSON();
+
+    // Function to check if point is inside polygon
+    // Using a simple ray-casting algorithm or relying on a library if available.
+    // Since we don't have turf.js, we'll implement a simple one or use Leaflet's utility if possible.
+    // Actually, for Rectangle, we can use bounds.
+
+    if (layer instanceof L.Rectangle) {
+        const bounds = layer.getBounds();
+
+        sites.forEach(site => {
+            if (bounds.contains([site.latitude, site.longitude])) {
+                selectedSites.push(site);
+            }
+        });
+
+        points.forEach(point => {
+            if (bounds.contains([point.lat, point.lng])) {
+                selectedPoints.push(point);
+            }
+        });
+    } else if (layer instanceof L.Polygon) {
+        // Ray casting algorithm for point in polygon
+        const polyPoints = layer.getLatLngs()[0]; // Assumes simple polygon (no holes)
+
+        sites.forEach(site => {
+            if (isPointInPolygon([site.latitude, site.longitude], polyPoints)) {
+                selectedSites.push(site);
+            }
+        });
+
+        points.forEach(point => {
+            if (isPointInPolygon([point.lat, point.lng], polyPoints)) {
+                selectedPoints.push(point);
+            }
+        });
+    }
+
+    console.log('Selected Sites:', selectedSites);
+    console.log('Selected Points:', selectedPoints);
+
+    showNotification(`Selected ${selectedSites.length} sites and ${selectedPoints.length} points`, 'info');
+
+    // Filter the map to show only selected items
+    updateMapMarkers({ fitBounds: false }, selectedSites, selectedPoints);
+}
+
+function isPointInPolygon(point, vs) {
+    // point = [lat, lng]
+    // vs = array of LatLng objects
+
+    const x = point[0], y = point[1];
+
+    let inside = false;
+    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        const xi = vs[i].lat, yi = vs[i].lng;
+        const xj = vs[j].lat, yj = vs[j].lng;
+
+        const intersect = ((yi > y) != (yj > y))
+            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+
+    return inside;
 }
 
 // ==================== SEARCH HANDLER ====================
@@ -159,6 +281,7 @@ function initializeEventListeners() {
 
     // Import Sites button
     document.getElementById('importSitesBtn')?.addEventListener('click', showImportMenu);
+    document.getElementById('closeImportMenuBtn')?.addEventListener('click', showSitesList);
 
     // Import method buttons
     document.querySelectorAll('.import-method-btn').forEach(btn => {
@@ -281,6 +404,28 @@ function initializeEventListeners() {
     // Export KML
     const exportModal = document.getElementById('exportModal');
 
+    // Address Search
+    const searchBtn = document.getElementById('searchAddressBtn');
+    const searchInput = document.getElementById('addressSearch');
+
+    if (searchBtn && searchInput) {
+        searchBtn.addEventListener('click', () => searchAddress(searchInput.value));
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchAddress(searchInput.value);
+        });
+
+        // Autocomplete
+        const debouncedFetch = debounce((query) => fetchSuggestions(query), 300);
+        searchInput.addEventListener('input', (e) => debouncedFetch(e.target.value));
+
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-container')) {
+                document.getElementById('searchSuggestions').style.display = 'none';
+            }
+        });
+    }
+
     // Import KML Header Button
     document.getElementById('importKmlHeaderBtn')?.addEventListener('click', () => {
         document.querySelector('.tab-btn[data-tab="kml"]').click();
@@ -302,6 +447,27 @@ function initializeEventListeners() {
 
     document.getElementById('exportKmlBtn').addEventListener('click', () => {
         exportModal.style.display = 'block';
+    });
+
+    // Import Alarms
+    // Import Alarms (Event Delegation)
+    document.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'importAlarmsBtn' || e.target.closest('#importAlarmsBtn'))) {
+            const fileInput = document.getElementById('alarmFileInput');
+            if (fileInput) {
+                console.log('Import Alarms clicked, triggering file input');
+                fileInput.click();
+            } else {
+                console.error('Alarm file input not found');
+            }
+        }
+    });
+
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'alarmFileInput') {
+            console.log('Alarm file selected');
+            handleAlarmImport(e);
+        }
     });
 
     document.getElementById('exportModalCloseBtn').addEventListener('click', () => {
@@ -372,7 +538,10 @@ function initializeEventListeners() {
             showNotification('Measurement deleted', 'info');
         }
     });
-    document.getElementById('clearAllBtn').addEventListener('click', clearAllSites);
+    const clearAllBtnEl = document.getElementById('clearAllBtn');
+    if (clearAllBtnEl) {
+        clearAllBtnEl.addEventListener('click', clearAllSites);
+    }
 
     // Map controls
     document.getElementById('centerMapBtn').addEventListener('click', centerMap);
@@ -848,6 +1017,7 @@ async function handleManualSubmit(e) {
     saveToLocalStorage();
     updateUI();
     updateMapMarkers();
+    showSitesList();
 
     // Reset form
     e.target.reset();
@@ -1973,6 +2143,12 @@ function renderVisibleSectors() {
 
             polygon.on('click', (e) => {
                 highlightSiteInList(site.id);
+
+                // Check for alarms
+                const siteAlarms = getAlarmsForSite(site.name);
+                if (siteAlarms.length > 0) {
+                    showAlarmsModal(site.name, siteAlarms);
+                }
             });
 
             sectorsLayer.addLayer(polygon);
@@ -2031,13 +2207,16 @@ function getTechnologyColor(technology) {
     return '#ec4899';
 }
 
-function updateMapMarkers(options = { fitBounds: true }) {
+function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, filteredPoints = null) {
     markersLayer.clearLayers();
     if (pointsLayer) pointsLayer.clearLayers();
     sectorsLayer.clearLayers();
 
+    const sitesToRender = filteredSites || sites;
+    const pointsToRender = filteredPoints || points;
+
     // Render Sites
-    sites.forEach(site => {
+    sitesToRender.forEach(site => {
         if (hiddenSiteGroups.has(site.group || 'Other')) return;
 
         // Standard Site Marker (Blue Pin)
@@ -2079,7 +2258,7 @@ function updateMapMarkers(options = { fitBounds: true }) {
     });
 
     // Render Points
-    points.forEach(point => {
+    pointsToRender.forEach(point => {
         // Check if point belongs to a hidden KML group
         if (point.type === 'kml_point' && hiddenKmlGroups.has(point.group)) {
             return;
@@ -2133,10 +2312,10 @@ function updateMapMarkers(options = { fitBounds: true }) {
     // Draw sectors for visible area
     renderVisibleSectors();
 
-    if (options.fitBounds && (sites.length > 0 || points.length > 0)) {
+    if (options.fitBounds && (sitesToRender.length > 0 || pointsToRender.length > 0)) {
         const allCoords = [
-            ...sites.map(s => [s.latitude, s.longitude]),
-            ...points.map(p => [p.latitude, p.longitude])
+            ...sitesToRender.map(s => [s.latitude, s.longitude]),
+            ...pointsToRender.map(p => [p.latitude, p.longitude])
         ];
         if (allCoords.length > 0) {
             const bounds = L.latLngBounds(allCoords);
@@ -3393,7 +3572,7 @@ function createCustomIcon(site, overrideColor = null) {
     }
 
     return L.divIcon({
-        className: 'custom-site-marker',
+        className: 'custom-site-marker point-marker',
         html: `
             <div style="position: relative; width: ${size}px; height: ${size}px;">
                 <svg viewBox="0 0 24 24" fill="${color}" stroke="white" stroke-width="1" style="width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
@@ -3964,6 +4143,102 @@ function clearThematicAnalysis() {
     showNotification('Thematic analysis cleared', 'info');
 }
 
+async function searchAddress(query) {
+    if (!query || query.trim() === '') {
+        showNotification('Please enter an address', 'warning');
+        return;
+    }
+
+    try {
+        showNotification('Searching...', 'info');
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+
+        if (data && data.length > 0) {
+            const result = data[0];
+            const lat = parseFloat(result.lat);
+            const lon = parseFloat(result.lon);
+
+            // Zoom to location
+            map.setView([lat, lon], 16); // Increased zoom level for better visibility
+
+            // Remove existing search marker if any
+            if (window.searchMarker) {
+                map.removeLayer(window.searchMarker);
+            }
+
+            // Add new marker
+            window.searchMarker = L.marker([lat, lon])
+                .addTo(map)
+                .bindPopup(`<div style="max-width: 200px;"><b>Location Found</b><br>${result.display_name}</div>`)
+                .openPopup();
+
+            showNotification('Location found', 'success');
+
+            // Clear suggestions and input
+            document.getElementById('searchSuggestions').style.display = 'none';
+        } else {
+            showNotification('Address not found', 'error');
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        showNotification('Error searching address', 'error');
+    }
+}
+
+// Autocomplete Logic
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+async function fetchSuggestions(query) {
+    if (query.length < 3) {
+        document.getElementById('searchSuggestions').style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`);
+        const data = await response.json();
+        renderSuggestions(data);
+    } catch (error) {
+        console.error('Error fetching suggestions:', error);
+    }
+}
+
+function renderSuggestions(results) {
+    const suggestionsContainer = document.getElementById('searchSuggestions');
+    suggestionsContainer.innerHTML = '';
+
+    if (results.length === 0) {
+        suggestionsContainer.style.display = 'none';
+        return;
+    }
+
+    results.forEach(result => {
+        const div = document.createElement('div');
+        div.className = 'suggestion-item';
+        div.textContent = result.display_name;
+        div.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent document click from closing immediately
+            document.getElementById('addressSearch').value = result.display_name;
+            suggestionsContainer.style.display = 'none';
+            searchAddress(result.display_name);
+        });
+        suggestionsContainer.appendChild(div);
+    });
+
+    suggestionsContainer.style.display = 'block';
+}
+
 let mapLegendControl = null;
 
 function renderMapLegend() {
@@ -4327,4 +4602,134 @@ function generatePalette(count) {
         colors.push(`hsl(${i * step}, 70%, 50%)`);
     }
     return colors;
+}
+
+// ==================== ALARM DATA INTEGRATION ====================
+
+function handleAlarmImport(event) {
+    console.log('handleAlarmImport triggered');
+    const file = event.target.files[0];
+    if (!file) {
+        console.warn('No file selected');
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            // Assume first sheet contains the data
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            // Convert to JSON
+            const jsonResults = XLSX.utils.sheet_to_json(worksheet);
+
+            if (jsonResults.length === 0) {
+                showNotification('No data found in the Excel file.', 'warning');
+                return;
+            }
+
+            alarmsData = jsonResults;
+            console.log('Imported Alarms:', alarmsData);
+
+            showNotification(`Successfully imported ${alarmsData.length} alarm records.`, 'success');
+
+            // Re-render map to update click handlers (optional, but good if markers are recreated)
+            // Actually, markers are already created. We modified the click handler in updateMapMarkers.
+            // But existing markers won't have the updated click logic unless we re-render.
+            // Wait, I modified the code to ALWAYS check alarmsData. So if alarmsData is populated, it should work.
+            // BUT, I need to make sure updateMapMarkers was actually updated in the previous step. Yes it was.
+
+        } catch (error) {
+            console.error('Error parsing Excel file:', error);
+            showNotification('Error parsing Excel file: ' + error.message, 'error');
+        }
+
+        // Reset input
+        event.target.value = '';
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+
+function getAlarmsForSite(siteName) {
+    if (!alarmsData || alarmsData.length === 0) return [];
+
+    // Normalize site name for comparison (trim, lowercase?)
+    // Let's try exact match first, then case-insensitive
+    const target = siteName.toString().trim().toLowerCase();
+
+    return alarmsData.filter(row => {
+        // Try to find a column that looks like 'Site' or 'Site Name'
+        // We'll search all keys of the first row to determine the column name?
+        // Or just search all values in the row?
+        // Let's assume common column names.
+
+        const keys = Object.keys(row);
+        let nameInRow = '';
+
+        // Priority keys
+        const nameKeys = ['Site', 'Site Name', 'SITE', 'Site_Name', 'Sitename', 'Node', 'NodeName'];
+
+        for (const key of keys) {
+            if (nameKeys.includes(key)) {
+                nameInRow = row[key];
+                break;
+            }
+        }
+
+        // Fallback: Check if any value matches exactly
+        if (!nameInRow) {
+            return Object.values(row).some(val =>
+                val && val.toString().trim().toLowerCase() === target
+            );
+        }
+
+        return nameInRow && nameInRow.toString().trim().toLowerCase() === target;
+    });
+}
+
+function showAlarmsModal(siteName, alarms) {
+    const modal = document.getElementById('alarmsModal');
+    const title = document.getElementById('alarmsModalTitle');
+    const container = document.getElementById('alarmsTableContainer');
+
+    title.textContent = `Alarms for ${siteName} (${alarms.length})`;
+
+    if (alarms.length === 0) {
+        container.innerHTML = '<p>No alarms found.</p>';
+        modal.style.display = 'block';
+        return;
+    }
+
+    // Create Table
+    const headers = Object.keys(alarms[0]);
+
+    let tableHtml = '<table class="data-table" style="width: 100%; border-collapse: collapse; margin-top: 10px;">';
+
+    // Header
+    tableHtml += '<thead><tr>';
+    headers.forEach(h => {
+        tableHtml += `<th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--primary-600); background-color: rgba(0, 0, 0, 0.3); color: var(--text-primary); font-weight: 600;">${h}</th>`;
+    });
+    tableHtml += '</tr></thead>';
+
+    // Body
+    tableHtml += '<tbody>';
+    alarms.forEach(row => {
+        tableHtml += '<tr>';
+        headers.forEach(h => {
+            let val = row[h] !== undefined ? row[h] : '';
+            tableHtml += `<td style="padding: 8px; border-bottom: 1px solid #eee;">${val}</td>`;
+        });
+        tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    container.innerHTML = tableHtml;
+    modal.style.display = 'block';
 }

@@ -74,12 +74,12 @@ body {
 
 /* Header */
 .app-header {
-    background: var(--bg-card);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-darker);
+    border-bottom: 2px solid var(--primary-600);
     padding: var(--spacing-md) var(--spacing-xl);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
+    z-index: 100;
+    position: relative;
 }
 
 .header-content {
@@ -98,10 +98,9 @@ body {
 .logo h1 {
     font-size: 1.5rem;
     font-weight: 700;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #3b82f6;
+    /* Bright Blue */
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
 }
 
 .header-actions {
@@ -704,18 +703,35 @@ body {
 
 /* Zoom Level Adjustments */
 .zoom-level-low .custom-site-marker svg {
-    transform: scale(1.5); /* Make points bigger when zoomed out */
+    transform: scale(0.6);
+    /* Make points smaller when zoomed out */
     transition: transform 0.3s ease;
 }
 
+.zoom-level-low .custom-site-marker.point-marker svg {
+    transform: scale(1);
+    /* Keep points normal size */
+}
+
 .zoom-level-low .site-marker-label {
-    opacity: 0; /* Hide labels when zoomed out */
-    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.7);
+    /* Make labels smaller */
+    opacity: 0.8;
+}
+
+.zoom-level-medium .custom-site-marker svg {
+    transform: scale(0.8);
+    transition: transform 0.3s ease;
+}
+
+.zoom-level-medium .custom-site-marker.point-marker svg {
+    transform: scale(1);
+    /* Keep points normal size */
 }
 
 .zoom-level-medium .site-marker-label {
-    font-size: 11px; /* Smaller labels at medium zoom */
-    padding: 1px 4px;
+    transform: translate(-50%, -50%) scale(0.85);
+    opacity: 0.9;
 }
 
 /* Sector Labels */
@@ -1085,4 +1101,63 @@ body {
 .delete-btn:hover svg {
     fill: rgba(239, 68, 68, 0.1) !important;
     transform: scale(1.1);
+}
+
+/* Search Container */
+.search-container {
+    display: flex;
+    gap: 5px;
+    background: white;
+    padding: 5px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    pointer-events: auto;
+}
+
+.search-input {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-input:focus {
+    border-color: var(--primary-500);
+}
+
+/* Search Suggestions */
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 2000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: none;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
 }
