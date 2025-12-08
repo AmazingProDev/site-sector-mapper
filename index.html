@@ -33,7 +33,7 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/684/684908.png">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=14">
+    <link rel="stylesheet" href="style.css?v=99">
 </head>
 
 <body>
@@ -83,8 +83,7 @@
                         </svg>
                         Import KML
                     </button>
-                    <button id="bulkEditBtn" class="btn btn-primary"
-                        style="background-color: #10b981; border-color: #059669;">
+                    <button id="bulkEditBtn" class="btn btn-primary btn-success">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -100,8 +99,7 @@
                         </svg>
                         Clear All
                     </button>
-                    <button id="importAlarmsBtn" class="btn btn-secondary"
-                        style="border-color: #f59e0b; color: #f59e0b;">
+                    <button id="importAlarmsBtn" class="btn btn-secondary btn-warning">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -177,13 +175,12 @@
                     <!-- Sites List Tab -->
                     <div class="tab-pane active" id="sites-list-tab">
                         <!-- Import Menu -->
-                        <div id="importMenu" class="import-menu" style="display: none;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3>Choose Import Method</h3>
+                        <div id="importMenu" class="import-menu d-none">
+                            <div class="d-flex justify-between align-center mb-3">
+                                <h3 class="mb-0">Choose Import Method</h3>
                                 <button id="closeImportMenuBtn" class="btn btn-secondary btn-sm">Close</button>
                             </div>
-                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div class="d-flex flex-column gap-3">
                                 <button class="btn btn-primary btn-block import-method-btn" data-method="manual">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
@@ -198,7 +195,7 @@
                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                                         <polyline points="14 2 14 8 20 8" />
                                     </svg>
-                                    CSV Import
+                                    CSV / Excel Import
                                 </button>
                                 <button class="btn btn-primary btn-block import-method-btn" data-method="airtable">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -208,8 +205,7 @@
                                     </svg>
                                     Airtable Import
                                 </button>
-                                <button id="syncToAirtableBtn" class="btn btn-success btn-block"
-                                    style="margin-top: 0.5rem; background-color: #10b981; border-color: #059669;">
+                                <button id="syncToAirtableBtn" class="btn btn-success btn-block mt-2">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M21.5 2v6h-6M21.5 3l-9 9M2.5 22v-6h6M2.5 21l9-9" />
@@ -220,10 +216,9 @@
                         </div>
 
                         <!-- Manual Entry Form -->
-                        <div id="manualFormContainer" style="display: none;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3>Manual Entry</h3>
+                        <div id="manualFormContainer" class="d-none">
+                            <div class="d-flex justify-between align-center mb-3">
+                                <h3 class="mb-0">Manual Entry</h3>
                                 <button id="backFromManualBtn" class="btn btn-secondary btn-sm">← Back</button>
                             </div>
                             <form id="manualForm" class="site-form">
@@ -262,11 +257,11 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="iconColor">Icon Color</label>
-                                    <div style="display: flex; gap: 10px;">
-                                        <input type="color" id="iconColor" value="#3b82f6"
-                                            style="height: 40px; width: 60px; padding: 0;">
+                                    <div class="d-flex" style="gap: 10px;">
+                                        <input type="color" id="iconColor" value="#3b82f6" class="p-0"
+                                            style="height: 40px; width: 60px;">
                                         <input type="text" id="iconColorText" value="#3b82f6" placeholder="#3b82f6"
-                                            style="flex: 1;">
+                                            class="flex-1">
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -299,8 +294,7 @@
                                         </svg>
                                         Add Site
                                     </button>
-                                    <button type="button" id="cancelEditBtn" class="btn btn-secondary btn-block"
-                                        style="display: none;">
+                                    <button type="button" id="cancelEditBtn" class="btn btn-secondary btn-block d-none">
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
                                             <line x1="18" y1="6" x2="6" y2="18" />
@@ -313,10 +307,9 @@
                         </div>
 
                         <!-- CSV Import Form -->
-                        <div id="csvFormContainer" style="display: none;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3>CSV Import</h3>
+                        <div id="csvFormContainer" class="d-none">
+                            <div class="d-flex justify-between align-center mb-3">
+                                <h3 class="mb-0">File Import (CSV / Excel)</h3>
                                 <button id="backFromCsvBtn" class="btn btn-secondary btn-sm">← Back</button>
                             </div>
                             <div class="upload-section">
@@ -328,23 +321,23 @@
                                         <line x1="12" y1="18" x2="12" y2="12" />
                                         <line x1="9" y1="15" x2="15" y2="15" />
                                     </svg>
-                                    <p class="drop-text">Drag & drop CSV file here</p>
+                                    <p class="drop-text">Drag & drop CSV or Excel file here</p>
                                     <p class="drop-subtext">or</p>
                                     <button type="button" class="btn btn-secondary" id="selectFileBtn">Browse
                                         Files</button>
-                                    <input type="file" id="csvFileInput" accept=".csv" hidden
-                                        aria-label="Upload CSV File">
+                                    <input type="file" id="csvFileInput" accept=".csv, .xlsx, .xls" hidden
+                                        aria-label="Upload File">
                                 </div>
 
                                 <div class="csv-info">
-                                    <h3>CSV Format</h3>
-                                    <p>Your CSV should have the following columns:</p>
+                                    <h3>File Format</h3>
+                                    <p>Your file should have the following columns:</p>
                                     <code>site_name,latitude,longitude,description,azimuth,beamwidth,range</code>
                                     <p class="csv-note">Multiple sectors: Add rows with the same site_name but different
                                         sector values.</p>
                                 </div>
 
-                                <div id="csvPreview" class="csv-preview" style="display: none;">
+                                <div id="csvPreview" class="csv-preview d-none">
                                     <h3>Preview</h3>
                                     <div id="csvPreviewContent"></div>
                                     <div class="preview-actions">
@@ -356,10 +349,9 @@
                         </div>
 
                         <!-- Airtable Import Form -->
-                        <div id="airtableFormContainer" style="display: none;">
-                            <div
-                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                <h3>Airtable Import</h3>
+                        <div id="airtableFormContainer" class="d-none">
+                            <div class="d-flex justify-between align-center mb-3">
+                                <h3 class="mb-0">Airtable Import</h3>
                                 <button id="backFromAirtableBtn" class="btn btn-secondary btn-sm">← Back</button>
                             </div>
                             <form class="airtable-section" onsubmit="return false;">
@@ -389,7 +381,7 @@
                                     Fetch from Airtable
                                 </button>
 
-                                <div id="airtableStatus" class="status-message" style="display: none;"></div>
+                                <div id="airtableStatus" class="status-message d-none"></div>
                             </form>
                         </div>
                     </div>
@@ -418,12 +410,12 @@
                                 <p class="csv-note">Styles (color, scale) will be imported if available.</p>
                             </div>
 
-                            <div id="kmlPreview" class="csv-preview" style="display: none;">
+                            <div id="kmlPreview" class="csv-preview d-none">
                                 <h3>Preview</h3>
                                 <div id="kmlPreviewContent"></div>
                                 <div class="preview-actions">
                                     <button id="importKmlBtn" class="btn btn-primary" type="button">Import KML</button>
-                                    <button id="debugImportBtn" class="btn btn-warning" type="button"
+                                    <button id="debugImportBtn" class="btn btn-warning-filled" type="button"
                                         onclick="console.log('Debug click'); importKmlData()">Debug Import</button>
                                     <button id="cancelKmlBtn" class="btn btn-secondary" type="button">Cancel</button>
                                 </div>
@@ -434,21 +426,20 @@
                     <!-- KML List Tab -->
                     <div class="tab-pane" id="kml-list-tab">
                         <div class="sites-list-header">
-                            <h3>KML List <span id="kmlTotalCount"
-                                    style="font-size: 0.8em; color: var(--text-muted);"></span></h3>
-                            <div style="display: flex; gap: 5px;">
-                                <input type="text" id="searchKmlList" class="search-input" placeholder="Search KML..."
-                                    style="margin-bottom: 0;">
-                                <button id="analyzeKmlBtn" class="btn btn-sm btn-primary" title="Analyze Map"
-                                    style="background-color: #8b5cf6; border-color: #7c3aed;">
+                            <h3>KML List <span id="kmlTotalCount" class="kml-count"></span></h3>
+                            <div class="d-flex gap-sm">
+                                <input type="text" id="searchKmlList" class="search-input mb-0"
+                                    placeholder="Search KML...">
+                                <button id="analyzeKmlBtn" class="btn btn-sm btn-primary btn-purple"
+                                    title="Analyze Map">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <circle cx="11" cy="11" r="8"></circle>
                                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                                     </svg>
                                 </button>
-                                <button id="clearKmlDataBtn" class="btn btn-sm btn-secondary" title="Clear All KML Data"
-                                    style="color: var(--error); border-color: var(--error);">
+                                <button id="clearKmlDataBtn" class="btn btn-sm btn-secondary btn-danger-outline"
+                                    title="Clear All KML Data">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <polyline points="3 6 5 6 21 6"></polyline>
@@ -457,9 +448,8 @@
                                         </path>
                                     </svg>
                                 </button>
-                                <button id="exportAttributesBtn" class="btn btn-sm btn-primary"
-                                    title="Export Attributes to CSV"
-                                    style="background-color: #10b981; border-color: #059669;">
+                                <button id="exportAttributesBtn" class="btn btn-sm btn-primary btn-success"
+                                    title="Export Attributes to CSV">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                         stroke-width="2">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -490,13 +480,12 @@
                     <div class="tab-pane" id="thematic-tab">
                         <div class="thematic-section">
                             <h3>Thematic Analysis</h3>
-                            <p class="text-muted" style="margin-bottom: 1rem;">Color-code map sectors based on
+                            <p class="text-muted mb-3">Color-code map sectors based on
                                 attributes.</p>
                             <div class="thematic-controls">
                                 <!-- Site Sectors Section -->
-                                <div class="analysis-section"
-                                    style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">Site Sectors Analysis
+                                <div class="analysis-section">
+                                    <h4 class="mb-2 text-primary">Site Sectors Analysis
                                     </h4>
                                     <div class="form-group">
                                         <label for="siteAttribute">Select Attribute</label>
@@ -512,8 +501,8 @@
                                 </div>
 
                                 <!-- KML Points Section -->
-                                <div class="analysis-section" style="margin-bottom: 1rem;">
-                                    <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">KML Points Analysis
+                                <div class="analysis-section mb-3">
+                                    <h4 class="mb-2 text-primary">KML Points Analysis
                                     </h4>
                                     <div class="form-group">
                                         <label for="kmlAttribute">Select Attribute</label>
@@ -524,7 +513,7 @@
                                     </div>
                                 </div>
 
-                                <div class="form-actions" style="margin-top: 1rem;">
+                                <div class="form-actions mt-3">
                                     <button id="applyThematicBtn" class="btn btn-primary btn-block">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
@@ -532,14 +521,12 @@
                                         </svg>
                                         Analyze Map
                                     </button>
-                                    <button id="clearThematicBtn" class="btn btn-secondary btn-block"
-                                        style="margin-top: 0.5rem;">
+                                    <button id="clearThematicBtn" class="btn btn-secondary btn-block mt-2">
                                         Clear Analysis
                                     </button>
                                 </div>
 
-                                <div id="thematicLegend" class="thematic-legend"
-                                    style="display: none; margin-top: 1.5rem;">
+                                <div id="thematicLegend" class="thematic-legend d-none mt-4">
                                     <h4>Legend</h4>
                                     <div id="legendContent"></div>
                                 </div>
@@ -557,11 +544,11 @@
                         <div id="sitesListSection" class="sites-list">
                             <div class="sites-list-header">
                                 <h3>Sites List</h3>
-                                <div style="display: flex; gap: 5px;">
-                                    <input type="text" id="searchSites" class="search-input"
-                                        placeholder="Search sites..." style="margin-bottom: 0;">
-                                    <button id="analyzeSitesBtn" class="btn btn-sm btn-primary" title="Analyze Map"
-                                        style="background-color: #8b5cf6; border-color: #7c3aed;">
+                                <div class="d-flex gap-sm">
+                                    <input type="text" id="searchSites" class="search-input mb-0"
+                                        placeholder="Search sites...">
+                                    <button id="analyzeSitesBtn" class="btn btn-sm btn-primary btn-purple"
+                                        title="Analyze Map">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
                                             <circle cx="11" cy="11" r="8"></circle>
@@ -589,12 +576,11 @@
             <main class="map-container">
                 <div id="map"></div>
                 <div class="map-controls">
-                    <div class="search-container"
-                        style="margin-bottom: 10px; pointer-events: auto; position: relative;">
-                        <input type="text" id="addressSearch" placeholder="Search address..." class="search-input"
-                            style="width: 200px; margin-bottom: 0;">
+                    <div class="search-container-styled">
+                        <input type="text" id="addressSearch" placeholder="Search address..."
+                            class="search-input w-200 mb-0">
                         <div id="searchSuggestions" class="search-suggestions"></div>
-                        <button id="searchAddressBtn" class="btn btn-primary" style="padding: 8px;">
+                        <button id="searchAddressBtn" class="btn btn-primary p-2" title="Search Address">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <circle cx="11" cy="11" r="8"></circle>
@@ -671,7 +657,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalSiteName">Site Details</h2>
-                <button class="modal-close" id="modalCloseBtn">
+                <button class="modal-close" id="modalCloseBtn" title="Close">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
@@ -686,10 +672,10 @@
 
     <!-- Modal for Export Options -->
     <div id="exportModal" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-content modal-width-sm">
             <div class="modal-header">
                 <h2>Export Options</h2>
-                <button class="modal-close" id="exportModalCloseBtn">
+                <button class="modal-close" id="exportModalCloseBtn" title="Close">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
@@ -699,7 +685,7 @@
             <div class="modal-body">
                 <p>Choose what you want to include in the KML file:</p>
                 <div class="export-options">
-                    <button id="exportSitesOnlyBtn" class="btn btn-secondary btn-block" style="margin-bottom: 10px;">
+                    <button id="exportSitesOnlyBtn" class="btn btn-secondary btn-block mb-2">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
@@ -721,10 +707,10 @@
 
     <!-- Modal for Bulk Edit -->
     <div id="bulkEditModal" class="modal">
-        <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-content modal-width-sm">
             <div class="modal-header">
                 <h2>Bulk Edit Sectors</h2>
-                <button class="modal-close" id="bulkEditModalCloseBtn">
+                <button class="modal-close" id="bulkEditModalCloseBtn" title="Close">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
@@ -753,26 +739,23 @@
 
     <!-- Modal for Alarms -->
     <div id="alarmsModal" class="modal">
-        <div class="modal-content" style="max-width: 900px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-content modal-content-lg">
             <div class="modal-header">
                 <h2 id="alarmsModalTitle">Site Alarms</h2>
-                <button class="modal-close" id="alarmsModalCloseBtn"
-                    onclick="document.getElementById('alarmsModal').style.display='none'">
+                <button class="modal-close" id="alarmsModalCloseBtn" title="Close">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                 </button>
             </div>
-            <div class="modal-body" style="overflow-y: auto; flex: 1;">
+            <div class="modal-body overflow-auto flex-1">
                 <div id="alarmsTableContainer">
                     <!-- Table will be injected here -->
                 </div>
             </div>
-            <div class="modal-footer"
-                style="padding-top: 1rem; border-top: 1px solid var(--border-color); text-align: right;">
-                <button class="btn btn-secondary"
-                    onclick="document.getElementById('alarmsModal').style.display='none'">Close</button>
+            <div class="modal-footer pt-3 border-top text-right">
+                <button class="btn btn-secondary" id="alarmsModalCloseBtnBottom">Close</button>
             </div>
         </div>
     </div>
@@ -861,7 +844,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-    <script src="app.js?v=91"></script>
+    <script src="app.js?v=105"></script>
 </body>
 
 </html>

@@ -1,6 +1,7 @@
 // Site Sector Mapper - Main Application Logic
 
-console.log('App.js loaded v76');
+// Site Sector Mapper - Main Application Logic
+
 // Global State
 let sites = [];
 let map = null;
@@ -27,6 +28,103 @@ let hiddenKmlGroups = new Set(); // Track hidden KML groups
 let hiddenSiteGroups = new Set(); // Track hidden Site groups
 let activeThematicSettings = { sites: null, kml: null }; // Independent settings for Sites and KML
 let alarmsData = []; // Store imported alarm data
+
+// Helper to generate unique ID
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+/**
+ * Normalizes CSV headers to standard keys
+ * @param {Array} headers - Row object keys
+ * @returns {Object} Map of original header -> standard key
+ */
+function normalizeCSVHeaders(headers) {
+    const map = {};
+    const standardKeys = {
+        'site_name': ['site', 'name', 'sitename', 'site name', 'site_name', 'identifier'],
+        'latitude': ['lat', 'latitude', 'lat.', 'y'],
+        'longitude': ['lon', 'lng', 'long', 'longitude', 'long.', 'x'],
+        'azimuth': ['azimuth', 'azi', 'heading', 'dir', 'direction', 'azimut'],
+        'beamwidth': ['beamwidth', 'beam', 'hbws', 'bw', 'h_beamwidth', 'bandwith'],
+        'range': ['range', 'radius', 'dist', 'distance', 'rang'],
+        'description': ['description', 'desc', 'notes', 'comment'],
+        'sector_name': ['sector', 'sector_name', 'cell', 'cellid', 'sectorid'],
+        'color': ['color', 'colour', 'rgb'],
+        'opacity': ['opacity', 'alpha', 'transparency'],
+        'technology': ['technology', 'tech', 'system', 'rat'],
+        'frequency': ['frequency', 'freq', 'band']
+    };
+
+    headers.forEach(header => {
+        const normalized = header.toLowerCase().trim().replace(/[\s\._-]/g, '');
+        let match = null;
+
+        // Check standard keys
+        for (const [key, variants] of Object.entries(standardKeys)) {
+            // Check direct match or variants
+            if (key.replace(/_/g, '') === normalized || variants.some(v => v.replace(/[\s\._-]/g, '') === normalized)) {
+                match = key;
+                break;
+            }
+        }
+
+        // If no match, check startsWith for partial matches (e.g. "Site Name (Primary)")
+        if (!match) {
+            for (const [key, variants] of Object.entries(standardKeys)) {
+                if (variants.some(v => normalized.startsWith(v.replace(/[\s\._-]/g, '')))) {
+                    match = key;
+                    break;
+                }
+            }
+        }
+
+        if (match) {
+            map[header] = match;
+        }
+    });
+    return map;
+}
+
+/**
+ * Robust number parser handling commas and non-numeric chars
+ * Also auto-scales huge integers to valid coordinate ranges if specified
+ * @param {string|number} val 
+ * @param {boolean} isCoordinate - If true, restricts to -180/180 range
+ * @returns {number|null}
+ */
+function parseNumber(val, isCoordinate = false) {
+    if (val === null || val === undefined || val === '') return null;
+
+    let num = val;
+
+    if (typeof val === 'string') {
+        let cleanVal = val.trim();
+        // Handle "1.234.567" format (European thousands separators or just bad formatting)
+        // If multiple dots, remove all of them and treat as integer
+        if ((cleanVal.match(/\./g) || []).length > 1) {
+            cleanVal = cleanVal.replace(/\./g, '');
+        } else if (cleanVal.includes(',') && !cleanVal.includes('.')) {
+            cleanVal = cleanVal.replace(',', '.');
+        }
+        num = parseFloat(cleanVal);
+    }
+
+    if (isNaN(num)) return null;
+
+    // Auto-scale coordinates that are clearly too big (e.g. 3356858611 -> 33.568...)
+    if (isCoordinate) {
+        // While larger than 180 (max long) or smaller than -180, divide by 10
+        // Limit iterations to avoid infinite loop
+        let iterations = 0;
+        while ((num > 180 || num < -180) && iterations < 15) {
+            num = num / 10;
+            iterations++;
+        }
+    }
+
+    return num;
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -55,7 +153,6 @@ function init() {
 
     // Map Click Handler for "Add Marker" and "Measure" modes
     map.on('click', (e) => {
-        console.log('Map clicked:', e.latlng, 'isAddingMarker:', isAddingMarker, 'isMeasuring:', isMeasuring);
         if (isAddingMarker) {
             const { lat, lng } = e.latlng;
             openPointModal(null, lat, lng);
@@ -483,6 +580,14 @@ function initializeEventListeners() {
         exportModal.style.display = 'none';
     });
 
+    // Close buttons for Alarms Modal
+    const closeAlarmModal = () => {
+        const modal = document.getElementById('alarmsModal');
+        if (modal) modal.style.display = 'none';
+    };
+    document.getElementById('alarmsModalCloseBtn')?.addEventListener('click', closeAlarmModal);
+    document.getElementById('alarmsModalCloseBtnBottom')?.addEventListener('click', closeAlarmModal);
+
     // Sync to Airtable
     const syncToAirtableBtn = document.getElementById('syncToAirtableBtn');
     if (syncToAirtableBtn) {
@@ -623,70 +728,59 @@ function switchTab(tabName) {
     // Show sites list when on sites-list tab
     if (tabName === 'sites-list') {
         showSitesList();
+    } else {
+        // Ensure sites list section is hidden when not on sites-list tab
+        // (Though technically it's inside the sites-list-tab pane, so hiding the pane hides it too)
+        document.getElementById('sitesListSection')?.classList.add('d-none');
     }
 
-    // Update Sites List visibility
-    const sitesListSection = document.getElementById('sitesListSection');
-    const pointsListTab = document.getElementById('points-list-tab');
-
-    if (tabName === 'kml-list') {
-        sitesListSection.style.display = 'none';
-    } else if (tabName === 'kml') {
-        sitesListSection.style.display = 'none';
-    } else if (tabName === 'points-list') {
-        sitesListSection.style.display = 'none';
+    if (tabName === 'points-list') {
         renderPointsList();
-    } else if (tabName === 'points-list') {
-        sitesListSection.style.display = 'none';
-        renderPointsList();
-    } else if (tabName === 'thematic') {
-        sitesListSection.style.display = 'none';
-    } else if (tabName !== 'sites-list') {
-        sitesListSection.style.display = 'none';
     }
 }
 
 // ==================== IMPORT MENU NAVIGATION ====================
 
 function showImportMenu() {
+    switchTab('sites-list');
     // Hide all forms
-    document.getElementById('manualFormContainer').style.display = 'none';
-    document.getElementById('csvFormContainer').style.display = 'none';
-    document.getElementById('airtableFormContainer').style.display = 'none';
-    document.getElementById('sitesListSection').style.display = 'none';
+    document.getElementById('manualFormContainer').classList.add('d-none');
+    document.getElementById('csvFormContainer').classList.add('d-none');
+    document.getElementById('airtableFormContainer').classList.add('d-none');
+    document.getElementById('sitesListSection').classList.add('d-none');
 
     // Show import menu
-    document.getElementById('importMenu').style.display = 'block';
+    document.getElementById('importMenu').classList.remove('d-none');
 }
 
 function showImportMethod(method) {
     // Hide import menu
-    document.getElementById('importMenu').style.display = 'none';
+    document.getElementById('importMenu').classList.add('d-none');
 
     // Hide all forms
-    document.getElementById('manualFormContainer').style.display = 'none';
-    document.getElementById('csvFormContainer').style.display = 'none';
-    document.getElementById('airtableFormContainer').style.display = 'none';
+    document.getElementById('manualFormContainer').classList.add('d-none');
+    document.getElementById('csvFormContainer').classList.add('d-none');
+    document.getElementById('airtableFormContainer').classList.add('d-none');
 
     // Show selected form
     if (method === 'manual') {
-        document.getElementById('manualFormContainer').style.display = 'block';
+        document.getElementById('manualFormContainer').classList.remove('d-none');
     } else if (method === 'csv') {
-        document.getElementById('csvFormContainer').style.display = 'block';
+        document.getElementById('csvFormContainer').classList.remove('d-none');
     } else if (method === 'airtable') {
-        document.getElementById('airtableFormContainer').style.display = 'block';
+        document.getElementById('airtableFormContainer').classList.remove('d-none');
     }
 }
 
 function showSitesList() {
     // Hide all forms and menu
-    document.getElementById('importMenu').style.display = 'none';
-    document.getElementById('manualFormContainer').style.display = 'none';
-    document.getElementById('csvFormContainer').style.display = 'none';
-    document.getElementById('airtableFormContainer').style.display = 'none';
+    document.getElementById('importMenu').classList.add('d-none');
+    document.getElementById('manualFormContainer').classList.add('d-none');
+    document.getElementById('csvFormContainer').classList.add('d-none');
+    document.getElementById('airtableFormContainer').classList.add('d-none');
 
     // Show sites list
-    document.getElementById('sitesListSection').style.display = 'block';
+    document.getElementById('sitesListSection').classList.remove('d-none');
     renderSitesList(); // Ensure list is rendered
 }
 
@@ -1084,8 +1178,36 @@ function handleDrop(e) {
 function handleFileSelect(e) {
     const files = e.target.files;
     if (files.length > 0) {
-        processCSVFile(files[0]);
+        const file = files[0];
+        if (file.name.endsWith('.csv')) {
+            processCSVFile(file);
+        } else if (file.name.match(/\.xls(x)?$/)) {
+            processExcelFile(file);
+        } else {
+            showNotification('Please select a valid CSV or Excel file', 'error');
+        }
     }
+}
+
+function processExcelFile(file) {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            // Get raw JSON
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            processImportData(jsonData);
+        } catch (error) {
+            console.error(error);
+            showNotification('Error parsing Excel file: ' + error.message, 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 function processCSVFile(file) {
@@ -1096,14 +1218,55 @@ function processCSVFile(file) {
 
     Papa.parse(file, {
         header: true,
+        skipEmptyLines: true,
         complete: (results) => {
-            csvData = results.data.filter(row => row.site_name && row.latitude && row.longitude);
-            showCSVPreview(csvData);
+            if (results.data.length === 0) {
+                showNotification('CSV file is empty', 'error');
+                return;
+            }
+            processImportData(results.data);
         },
         error: (error) => {
             showNotification('Error parsing CSV: ' + error.message, 'error');
         }
     });
+}
+
+function processImportData(rawData) {
+    if (!rawData || rawData.length === 0) {
+        showNotification('No data found in file', 'error');
+        return;
+    }
+
+    // Normalize headers
+    // Use the keys from the first row if checking rawData
+    const keys = Object.keys(rawData[0]);
+    const headerMap = normalizeCSVHeaders(keys);
+
+    // Map data to standard keys
+    csvData = rawData.map(row => {
+        const newRow = {};
+        for (const [key, val] of Object.entries(row)) {
+            if (headerMap[key]) {
+                newRow[headerMap[key]] = val;
+            } else {
+                newRow[key] = val; // Keep original if no match
+            }
+        }
+        return newRow;
+    }).filter(row => {
+        // Flexible validation: needs site name and coordinates
+        const hasName = row.site_name;
+        const hasLat = parseNumber(row.latitude, true) !== null;
+        const hasLng = parseNumber(row.longitude, true) !== null;
+        return hasName && hasLat && hasLng;
+    });
+
+    if (csvData.length === 0) {
+        showNotification('No valid sites found. Check file headers (Site Name, Latitude, Longitude required).', 'error');
+    } else {
+        showCSVPreview(csvData);
+    }
 }
 
 function showCSVPreview(data) {
@@ -1137,7 +1300,7 @@ function showCSVPreview(data) {
 
     html += '</ul>';
     content.innerHTML = html;
-    preview.style.display = 'block';
+    preview.classList.remove('d-none');
 }
 
 function renderPointsList(filter = '') {
@@ -1220,23 +1383,27 @@ function importCsvData() {
             sitesMap[siteName] = {
                 id: generateId(),
                 name: row.site_name,
-                latitude: parseFloat(row.latitude),
-                longitude: parseFloat(row.longitude),
+                latitude: parseNumber(row.latitude, true),
+                longitude: parseNumber(row.longitude, true),
                 description: row.description || '',
                 group: 'CSV Import',
                 sectors: []
             };
         }
 
-        // Add sector if azimuth is present
-        if (row.azimuth) {
+        // Add sector if azimuth is present (and valid)
+        const azimuth = parseNumber(row.azimuth);
+
+        // Only add sector if we have at least an azimuth (or if it's explicitly 0)
+        // If row has no azimuth column, we might just be importing a site point
+        if (azimuth !== null) {
             sitesMap[siteName].sectors.push({
                 name: row.sector_name || '',
-                azimuth: parseFloat(row.azimuth) || 0,
-                beamwidth: parseFloat(row.beamwidth) || 65,
-                range: parseFloat(row.range) || 500,
+                azimuth: azimuth,
+                beamwidth: parseNumber(row.beamwidth) || 65,
+                range: parseNumber(row.range) || 500,
                 color: row.color || '#3388ff',
-                opacity: parseFloat(row.opacity) || 0.5,
+                opacity: parseNumber(row.opacity) || 0.5,
                 technology: row.technology || '',
                 frequency: row.frequency || ''
             });
@@ -1250,17 +1417,23 @@ function importCsvData() {
     // Save and update
     saveToLocalStorage();
     updateUI();
-    updateMapMarkers();
 
     // Reset CSV
     cancelCsvPreview();
+
+    // Return to list view
+    showSitesList();
+
+    console.log('UpdateMapMarkers call from importCsvData');
+    // Update map LAST to ensure it fits bounds correctly after UI settles
+    updateMapMarkers({ fitBounds: true });
 
     showNotification(`${newSites.length} sites imported successfully!`, 'success');
 }
 
 function cancelCsvPreview() {
     csvData = null;
-    document.getElementById('csvPreview').style.display = 'none';
+    document.getElementById('csvPreview').classList.add('d-none');
     document.getElementById('csvFileInput').value = '';
 }
 
@@ -1666,7 +1839,7 @@ function showKmlPreview(data) {
 
     if (data.length === 0) {
         content.innerHTML = '<p>No valid points found in KML.</p>';
-        preview.style.display = 'block';
+        preview.classList.remove('d-none');
         return;
     }
 
@@ -1702,14 +1875,14 @@ function showKmlPreview(data) {
 
     // Do NOT replace buttons, as it breaks event listeners attached in initializeEventListeners
     // The buttons are already present in index.html
-    preview.style.display = 'block';
+    preview.classList.remove('d-none');
 }
 
 
 
 function cancelKmlPreview() {
     kmlData = null;
-    document.getElementById('kmlPreview').style.display = 'none';
+    document.getElementById('kmlPreview').classList.add('d-none');
     document.getElementById('kmlFileInput').value = '';
 }
 
@@ -2215,6 +2388,8 @@ function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, f
     const sitesToRender = filteredSites || sites;
     const pointsToRender = filteredPoints || points;
 
+    console.log('Rendering Sites:', sitesToRender.length);
+
     // Render Sites
     sitesToRender.forEach(site => {
         if (hiddenSiteGroups.has(site.group || 'Other')) return;
@@ -2317,8 +2492,10 @@ function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, f
             ...sitesToRender.map(s => [s.latitude, s.longitude]),
             ...pointsToRender.map(p => [p.latitude, p.longitude])
         ];
+        console.log('Fitting bounds for', allCoords.length, 'coords');
         if (allCoords.length > 0) {
             const bounds = L.latLngBounds(allCoords);
+            console.log('Bounds:', bounds);
             map.fitBounds(bounds, { padding: [50, 50] });
         }
     }

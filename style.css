@@ -1161,3 +1161,188 @@ body {
 .suggestion-item:hover {
     background-color: rgba(255, 255, 255, 0.1);
 }
+
+/* Utility Classes */
+.d-none {
+    display: none !important;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.flex-column {
+    flex-direction: column;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.align-center {
+    align-items: center;
+}
+
+.gap-sm {
+    gap: 5px;
+}
+
+.mb-0 {
+    margin-bottom: 0 !important;
+}
+
+.mb-1 {
+    margin-bottom: 0.25rem;
+}
+
+.mb-2 {
+    margin-bottom: 0.5rem;
+}
+
+.mb-3 {
+    margin-bottom: 1rem;
+}
+
+.mt-2 {
+    margin-top: 0.5rem;
+}
+
+.w-200 {
+    width: 200px;
+}
+
+.p-2 {
+    padding: 8px;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.border-top {
+    border-top: 1px solid var(--border-color);
+}
+
+.pt-3 {
+    padding-top: 1rem;
+}
+
+.overflow-auto {
+    overflow-y: auto;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+/* Button Variants */
+.btn-success {
+    background-color: #10b981;
+    border-color: #059669;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+.btn-warning {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    background: transparent;
+}
+
+.btn-warning:hover {
+    background-color: rgba(245, 158, 11, 0.1);
+}
+
+.btn-warning-filled {
+    background-color: #f59e0b;
+    color: white;
+    border: none;
+}
+
+.btn-purple {
+    background-color: #8b5cf6;
+    border-color: #7c3aed;
+    color: white;
+}
+
+.btn-purple:hover {
+    background-color: #7c3aed;
+}
+
+.btn-danger-outline {
+    color: var(--error);
+    border-color: var(--error);
+    background: transparent;
+}
+
+.btn-danger-outline:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Modal Variants */
+.modal-content-sm {
+    max-width: 400px;
+}
+
+.modal-content-lg {
+    max-width: 900px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Specific Overrides */
+.search-container-styled {
+    margin-bottom: 10px;
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    gap: 5px;
+}
+
+.analysis-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.analysis-section:last-child {
+    border-bottom: none;
+    margin-bottom: 1rem;
+}
+
+
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-success {
+    color: var(--success);
+}
+
+.text-error {
+    color: var(--error);
+}
+
+.mt-3 {
+    margin-top: 1rem;
+}
+
+.mt-4 {
+    margin-top: 1.5rem;
+}
+
+.mb-4 {
+    margin-bottom: 1.5rem;
+}
+
+.pb-2 {
+    padding-bottom: 0.5rem;
+}
+
+.modal-width-sm {
+    max-width: 400px;
+}
