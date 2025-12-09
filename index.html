@@ -33,7 +33,12 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/684/684908.png">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="style.css?v=135">
+    <link rel="stylesheet" href="style.css?v=153">
+</head>
+</head>
+</head>
+</head>
+</head>
 </head>
 
 <body>
@@ -63,7 +68,7 @@
     </div>
 
     <!-- Main App (Hidden by default) -->
-    <div id="appContainer" class="app-container" style="display: none;">
+    <div id="appContainer" class="app-container hidden">
         <!-- Header -->
         <header class="app-header">
             <div class="header-content">
@@ -118,6 +123,16 @@
                         </svg>
                         <span id="connectionBtnText">Lines: Off</span>
                     </button>
+                    <button id="connectionSettingsBtn" class="btn btn-secondary" onclick="toggleConnectionSettings()"
+                        title="Connection Line Settings">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
+                    </button>
                     <button id="bulkEditBtn" class="btn btn-primary btn-success">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -142,7 +157,7 @@
                         </svg>
                         Import Alarms
                     </button>
-                    <button id="logoutBtn" class="btn btn-secondary btn-danger-outline" style="margin-left: 10px;">
+                    <button id="logoutBtn" class="btn btn-secondary btn-danger-outline ml-10">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -301,9 +316,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="iconColor">Icon Color</label>
-                                    <div class="d-flex" style="gap: 10px;">
-                                        <input type="color" id="iconColor" value="#3b82f6" class="p-0"
-                                            style="height: 40px; width: 60px;">
+                                    <div class="d-flex gap-10">
+                                        <input type="color" id="iconColor" value="#3b82f6" class="p-0 h-40 w-60">
                                         <input type="text" id="iconColorText" value="#3b82f6" placeholder="#3b82f6"
                                             class="flex-1">
                                     </div>
@@ -620,80 +634,109 @@
             <main class="map-container">
                 <div id="map"></div>
                 <div class="map-controls">
-                    <div class="search-container-styled">
-                        <input type="text" id="addressSearch" placeholder="Search address..."
-                            class="search-input w-200 mb-0">
-                        <div id="searchSuggestions" class="search-suggestions"></div>
-                        <button id="searchAddressBtn" class="btn btn-primary p-2" title="Search Address">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                        </button>
+                    <!-- Drag Handle -->
+                    <div class="drag-handle" title="Drag to move">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="9" cy="12" r="1"></circle>
+                            <circle cx="9" cy="5" r="1"></circle>
+                            <circle cx="9" cy="19" r="1"></circle>
+                            <circle cx="15" cy="12" r="1"></circle>
+                            <circle cx="15" cy="5" r="1"></circle>
+                            <circle cx="15" cy="19" r="1"></circle>
+                        </svg>
                     </div>
-                    <div class="map-control-group">
-                        <button class="map-control-btn" id="addMarkerBtn" title="Click to Add Marker">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                                <line x1="12" y1="5" x2="12" y2="15"></line>
-                                <line x1="7" y1="10" x2="17" y2="10"></line>
-                            </svg>
-                        </button>
-                        <button class="map-control-btn" id="measureBtn" title="Measure Distance">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M2 12h20"></path>
-                                <path d="M2 12l5-5"></path>
-                                <path d="M2 12l5 5"></path>
-                                <path d="M22 12l-5-5"></path>
-                                <path d="M22 12l-5 5"></path>
-                            </svg>
-                        </button>
-                        <button class="map-control-btn" id="clearMeasureBtn" title="Clear Measurements">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path
-                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
-                                </path>
-                            </svg>
-                        </button>
-                        <button id="toggleSiteNamesBtn" class="map-control-btn active" title="Toggle Site Names">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            <span class="control-label">Site Names</span>
-                        </button>
-                        <button id="toggleSectorNamesBtn" class="map-control-btn active" title="Toggle Sector Names">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M2 12h20" />
-                                <path d="M12 2v20" />
-                                <path d="M12 12l5-5" />
-                                <path d="M12 12l5 5" />
-                            </svg>
-                            <span class="control-label">Sector Names</span>
-                        </button>
-                    </div>
-                    <button id="centerMapBtn" class="map-control-btn" title="Center Map">
+                    <!-- Toggle Button -->
+                    <button id="toggleMapControlsBtn" class="toggle-controls-btn" title="Toggle Controls">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <line x1="12" y1="1" x2="12" y2="3" />
-                            <line x1="12" y1="21" x2="12" y2="23" />
-                            <line x1="1" y1="12" x2="3" y2="12" />
-                            <line x1="21" y1="12" x2="23" y2="12" />
+                            <polyline points="18 15 12 9 6 15"></polyline>
                         </svg>
                     </button>
+
+                    <!-- Collapsible Content -->
+                    <div id="mapControlsContent" class="controls-wrapper">
+                        <div class="search-container-styled">
+                            <input type="text" id="addressSearch" placeholder="Search address..."
+                                class="search-input w-200 mb-0">
+                            <div id="searchSuggestions" class="search-suggestions"></div>
+                            <button id="searchAddressBtn" class="btn btn-primary p-2" title="Search Address">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="controls-stack mt-2">
+                            <button id="locateBtn" class="btn btn-primary" title="Locate Me">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                                </svg>
+                            </button>
+                            <button id="addMarkerBtn" class="btn btn-primary" title="Click to Add Marker">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                    <circle cx="12" cy="10" r="3"></circle>
+                                    <line x1="12" y1="5" x2="12" y2="15"></line>
+                                    <line x1="7" y1="10" x2="17" y2="10"></line>
+                                </svg>
+                            </button>
+                            <button id="measureBtn" class="btn btn-secondary" title="Measure Distance">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M2 12h20M2 12l5-5m-5 5l5 5" />
+                                </svg>
+                            </button>
+                            <button id="clearMeasureBtn" class="btn btn-secondary" title="Clear Measurements">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                            </button>
+                            <button id="toggleNamesBtn" class="btn btn-secondary" title="Toggle Site Names">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Names
+                            </button>
+                            <button id="toggleSectorNamesBtn" class="btn btn-secondary" title="Toggle Sector Names">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                Sectors
+                            </button>
+                            <!-- Connection Lines Toggle -->
+                            <div class="control-group"></div>
+                        </div>
+                        <div class="controls-stack mt-2">
+                            <button id="centerMapBtn" class="btn btn-secondary" title="Center Map">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <circle cx="12" cy="12" r="3" />
+                                    <line x1="12" y1="1" x2="12" y2="3" />
+                                    <line x1="12" y1="21" x2="12" y2="23" />
+                                    <line x1="1" y1="12" x2="3" y2="12" />
+                                    <line x1="21" y1="12" x2="23" y2="12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- Keeping original order -->
+                    </div> <!-- End Wrapper -->
                 </div>
-            </main>
         </div>
+        </main>
+    </div>
     </div>
 
     <!-- Modal for Site Details -->
@@ -849,11 +892,9 @@
                     </div>
                     <div class="form-group">
                         <label for="pointColor">Icon Color</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="color" id="pointColor" value="#ef4444"
-                                style="height: 40px; width: 60px; padding: 0;">
-                            <input type="text" id="pointColorText" value="#ef4444" placeholder="#ef4444"
-                                style="flex: 1;">
+                        <div class="d-flex gap-10">
+                            <input type="color" id="pointColor" value="#ef4444" class="h-40 w-60 p-0">
+                            <input type="text" id="pointColorText" value="#ef4444" placeholder="#ef4444" class="flex-1">
                         </div>
                     </div>
                     <div class="form-group">
@@ -861,14 +902,12 @@
                         <textarea id="editSiteDescription" rows="3"></textarea>
                     </div>
 
-                    <div id="customPropertiesSection"
-                        style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                        <label style="display: block; margin-bottom: 5px;">Custom Properties</label>
+                    <div id="customPropertiesSection" class="custom-props-section">
+                        <label class="custom-props-label">Custom Properties</label>
                         <div id="customPropertiesContainer">
                             <!-- Custom properties will be added here -->
                         </div>
-                        <button type="button" id="addPropertyBtn" class="btn btn-secondary"
-                            style="width: 100%; margin-top: 5px; font-size: 0.9em;">
+                        <button type="button" id="addPropertyBtn" class="btn btn-secondary btn-add-prop">
                             + Add Property
                         </button>
                     </div>
@@ -888,7 +927,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-    <script src="app.js?v=134"></script>
+    <script src="app.js?v=153"></script>
 </body>
 
 </html>

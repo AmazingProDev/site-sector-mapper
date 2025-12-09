@@ -30,6 +30,24 @@ let activeThematicSettings = { sites: null, kml: null }; // Independent settings
 let alarmsData = []; // Store imported alarm data
 let connectionLinesLayer = null; // Track connection lines (LayerGroup)
 let isConnectionLinesEnabled = false; // Toggle state
+let connectionSettings = {
+    weight: 3,
+    opacity: 1,
+    defaultColor: '#ff073a',
+    earfcn1320Color: '#3b82f6',
+    earfcn3050Color: '#ff073a',
+    earfcn6300Color: '#10b981'
+};
+
+// Load settings
+try {
+    const savedLineSettings = localStorage.getItem('siteSectorMapper_connectionSettings');
+    if (savedLineSettings) {
+        connectionSettings = { ...connectionSettings, ...JSON.parse(savedLineSettings) };
+    }
+} catch (e) {
+    console.error('Error loading connection settings', e);
+}
 
 // Helper to generate unique ID
 function generateId() {
@@ -144,16 +162,17 @@ function init() {
     // SETUP LOGIN
     setupLogin();
     setupLogout();
+    setupMapControlsToggle();
 
     // Check Login State
     if (sessionStorage.getItem('isLoggedIn') === 'true') {
         document.getElementById('loginPage').style.display = 'none';
-        document.getElementById('appContainer').style.display = 'flex';
+        document.getElementById('appContainer').classList.remove('hidden');
         setTimeout(() => map.invalidateSize(), 100);
     } else {
         // Ensure app is hidden (already hidden by HTML/CSS, but just in case)
         document.getElementById('loginPage').style.display = 'flex';
-        document.getElementById('appContainer').style.display = 'none';
+        document.getElementById('appContainer').classList.add('hidden');
     }
 
     initializeEventListeners();
@@ -199,7 +218,7 @@ function setupLogin() {
         if (username === 'admin' && password === 'admin') {
             sessionStorage.setItem('isLoggedIn', 'true');
             document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('appContainer').style.display = 'flex';
+            document.getElementById('appContainer').classList.remove('hidden');
 
             // Critical: Map needs to know it has resized/appeared
             setTimeout(() => {
@@ -226,6 +245,20 @@ function setupLogout() {
             location.reload();
         }
     });
+}
+
+function setupMapControlsToggle() {
+    const toggleBtn = document.getElementById('toggleMapControlsBtn');
+    const controlsContainer = document.querySelector('.map-controls');
+
+    if (toggleBtn && controlsContainer) {
+        toggleBtn.addEventListener('click', () => {
+            controlsContainer.classList.toggle('collapsed');
+        });
+
+        // Initialize dragging
+        makeElementDraggable(controlsContainer);
+    }
 }
 
 
@@ -472,8 +505,11 @@ function initializeEventListeners() {
     document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
 
     // Map controls
-    document.getElementById('toggleSiteNamesBtn').addEventListener('click', toggleSiteNames);
-    document.getElementById('toggleSectorNamesBtn').addEventListener('click', toggleSectorNames);
+    const toggleNamesBtn = document.getElementById('toggleNamesBtn');
+    if (toggleNamesBtn) toggleNamesBtn.addEventListener('click', toggleSiteNames);
+
+    const toggleSectorsBtn = document.getElementById('toggleSectorNamesBtn');
+    if (toggleSectorsBtn) toggleSectorsBtn.addEventListener('click', toggleSectorNames);
 
     // Optimized rendering events
     let renderTimeout;
@@ -481,22 +517,7 @@ function initializeEventListeners() {
         clearTimeout(renderTimeout);
         renderTimeout = setTimeout(renderVisibleSectors, 200); // Debounce rendering
     });
-    const toggleSiteNamesBtn = document.getElementById('toggleSiteNamesBtn');
-    const toggleSectorNamesBtn = document.getElementById('toggleSectorNamesBtn');
 
-    if (toggleSiteNamesBtn) {
-        console.log('toggleSiteNamesBtn found');
-        toggleSiteNamesBtn.addEventListener('click', toggleSiteNames);
-    } else {
-        console.error('toggleSiteNamesBtn NOT found');
-    }
-
-    if (toggleSectorNamesBtn) {
-        console.log('toggleSectorNamesBtn found');
-        toggleSectorNamesBtn.addEventListener('click', toggleSectorNames);
-    } else {
-        console.error('toggleSectorNamesBtn NOT found');
-    }
 
     document.getElementById('centerMapBtn').addEventListener('click', centerMap);
 
@@ -690,9 +711,12 @@ function initializeEventListeners() {
     // document.getElementById('pointModalCloseBtn').addEventListener('click', closePointModal);
 
     // Add Marker Button
-    document.getElementById('addMarkerBtn').addEventListener('click', () => {
-        toggleAddMarkerMode(!isAddingMarker);
-    });
+    const addMarkerBtn = document.getElementById('addMarkerBtn');
+    if (addMarkerBtn) {
+        addMarkerBtn.addEventListener('click', () => {
+            toggleAddMarkerMode(!isAddingMarker);
+        });
+    }
 
     document.getElementById('measureBtn').addEventListener('click', () => {
         toggleMeasureMode(!isMeasuring);
@@ -2505,7 +2529,22 @@ function renderVisibleSectors() {
                 // Connection Line Logic
                 if (isConnectionLinesEnabled) {
                     L.DomEvent.stopPropagation(e);
-                    drawSectorToPoints(sector, site);
+
+                    // Find all sectors "under" this one (same Azimuth)
+                    // We assume minor floating point differences are okay, so using epsilon or exact match if from same file
+                    // But typically azimuth is integer or derived.
+                    const stackedSectors = site.sectors.filter(s => Math.abs(s.azimuth - sector.azimuth) < 1);
+
+                    if (connectionLinesLayer) connectionLinesLayer.clearLayers();
+
+                    stackedSectors.forEach(s => {
+                        drawSectorToPoints(s, site, false); // false = don't clear
+                    });
+
+                    // Notify if multiple were processed
+                    if (stackedSectors.length > 1) {
+                        showNotification(`Processed ${stackedSectors.length} stacked sectors`, 'info');
+                    }
                     return;
                 }
 
@@ -2537,12 +2576,15 @@ function renderVisibleSectors() {
 
 function toggleSiteNames() {
     showSiteNames = !showSiteNames;
-    const btn = document.getElementById('toggleSiteNamesBtn');
+    // Updated ID from toggleSiteNamesBtn to toggleNamesBtn
+    const btn = document.getElementById('toggleNamesBtn');
 
-    if (showSiteNames) {
-        btn.classList.add('active');
-    } else {
-        btn.classList.remove('active');
+    if (btn) {
+        if (showSiteNames) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     }
 
     // Update existing markers
@@ -2702,35 +2744,99 @@ function drawConnectionLine(point) {
     }
 }
 
-function drawSectorToPoints(sector, site) {
+function drawSectorToPoints(sector, site, clearLayer = true) {
     if (!isConnectionLinesEnabled) return;
 
     // Clear previous lines
-    if (connectionLinesLayer) connectionLinesLayer.clearLayers();
+    if (clearLayer && connectionLinesLayer) connectionLinesLayer.clearLayers();
 
-    // Determine target identifiers
-    const targets = [];
-    if (sector.cell_name) targets.push(String(sector.cell_name).trim().toLowerCase());
-    if (sector.name) targets.push(String(sector.name).trim().toLowerCase());
+    // Determine target identifiers from Sector
+    const targetName = sector.cell_name ? String(sector.cell_name).trim().toLowerCase() : (sector.name ? String(sector.name).trim().toLowerCase() : null);
+    const siteName = site.name ? String(site.name).trim().toLowerCase() : null;
 
-    if (targets.length === 0) return;
+    // Extract EARFCNs from Sector (if any)
+    const sectorEarfcnValues = [];
+    if (sector.customProperties) {
+        sector.customProperties.forEach(prop => {
+            if (prop.name.toLowerCase().includes('earfcn') && prop.value) {
+                // Split by common delimiters (comma, semicolon, space, slash)
+                const parts = String(prop.value).split(/[,;/\s]+/);
+                parts.forEach(p => {
+                    const clean = p.trim().toLowerCase();
+                    if (clean) sectorEarfcnValues.push(clean);
+                });
+            }
+        });
+    }
+
+    if (!targetName && sectorEarfcnValues.length === 0) return;
 
     // Find all matching KML points
     const matches = points.filter(p => {
         if (p.type !== 'kml_point') return false;
 
-        let pName = null;
-        // Check custom property "Cell Name"
-        if (p.customProperties) {
-            const prop = p.customProperties.find(prop =>
-                prop.name.toLowerCase().includes('cell') && prop.name.toLowerCase().includes('name')
-            );
-            if (prop) pName = String(prop.value).trim().toLowerCase();
-        }
-        // Check top level
-        if (!pName && p.cellName) pName = String(p.cellName).trim().toLowerCase();
+        const pointValues = []; // For name matching
+        let pointEarfcn = null;
+        let pointHasSiteMatch = false;
 
-        return pName && targets.includes(pName);
+        // 1. Gather Point Properties for Name Match
+        // Check Point Name
+        if (p.name) {
+            const val = String(p.name).trim().toLowerCase();
+            pointValues.push(val);
+            if (siteName && val.includes(siteName)) pointHasSiteMatch = true;
+        }
+
+        // Check "Cell Name" field
+        if (p.cellName) {
+            const val = String(p.cellName).trim().toLowerCase();
+            pointValues.push(val);
+            if (siteName && val.includes(siteName)) pointHasSiteMatch = true;
+        }
+
+        // Check All Custom Properties
+        if (p.customProperties) {
+            p.customProperties.forEach(prop => {
+                if (!prop.value) return;
+                const val = String(prop.value).trim().toLowerCase();
+                const key = prop.name.toLowerCase();
+
+                // Add to general values for Name check
+                pointValues.push(val);
+
+                // Check for Site Name match in properties
+                if (key.includes('site') && val === siteName) pointHasSiteMatch = true;
+
+                // Check for EARFCN in Point
+                if (key.includes('earfcn')) {
+                    // Assume point has only one EARFCN usually, but splitting is safe
+                    // We just store the first one found or check inclusion later?
+                    // Simplest: Check if this value matches any sector EARFCN
+                    // Actually, let's store it to compare.
+                    // But there might be multiple EAFRCN props?
+                    // Let's just check immediately:
+                    const parts = val.split(/[,;/\s]+/);
+                    parts.forEach(part => {
+                        if (sectorEarfcnValues.includes(part.trim())) {
+                            pointEarfcn = part.trim();
+                        }
+                    });
+                }
+            });
+        }
+
+        // MATCHING LOGIC:
+
+        // 1. Name Match (Original Strict/Broad)
+        if (targetName && pointValues.includes(targetName)) return true;
+
+        // 2. EARFCN Match (If Sector has EARFCNs AND Point matches Site Context)
+        // We require 'pointHasSiteMatch' to avoid global EARFCN matches.
+        if (sectorEarfcnValues.length > 0 && pointEarfcn && pointHasSiteMatch) {
+            return true;
+        }
+
+        return false;
     });
 
     if (matches.length === 0) {
@@ -2743,22 +2849,104 @@ function drawSectorToPoints(sector, site) {
 
     // Draw lines
     matches.forEach(point => {
+        let lineColor = connectionSettings.defaultColor; // Default from settings
+        let lineClass = '';
+        // Note: Removing pure class-based coloring preference if user wants custom colors via inputs.
+        // But for "Neon" effect we need the classes. 
+        // We will Apply the color via style AND the class for shadow, but overwrite stroke in style?
+        // Leaflet path options: 'color' overrides CSS stroke? Yes.
+        // But the neon animation !important might fight it.
+        // If we want fully custom colors, we might need dynamic styles or removing the !important from CSS classes?
+        // Or we update the color in the object passed to L.polyline.
+
+        let lineWeight = parseInt(connectionSettings.weight) || 3;
+        let lineOpacity = parseFloat(connectionSettings.opacity) || 1;
+
+        // Helper to determine color from EARFCN string
+        const getEarfcnColor = (earfcnStr) => {
+            const val = parseInt(earfcnStr);
+            if (isNaN(val)) return null;
+            if (val === 1320) return { color: connectionSettings.earfcn1320Color, className: 'neon-blue-pulse' };
+            if (val === 3050) return { color: connectionSettings.earfcn3050Color, className: 'neon-red-pulse' };
+            if (val === 6300) return { color: connectionSettings.earfcn6300Color, className: 'neon-green-pulse' };
+            return null;
+        };
+
+        // 1. Try to get color from Point's EARFCN (matched or otherwise)
+        let foundEarfcnString = null;
+        if (point.customProperties) {
+            const earfcnProp = point.customProperties.find(p => p.name.toLowerCase().includes('earfcn'));
+            if (earfcnProp && earfcnProp.value) foundEarfcnString = String(earfcnProp.value);
+        }
+
+        if (foundEarfcnString) {
+            const style = getEarfcnColor(foundEarfcnString);
+            if (style) {
+                lineColor = style.color;
+                lineClass = style.className;
+            }
+        } else if (sectorEarfcnValues.length === 1) {
+            const style = getEarfcnColor(sectorEarfcnValues[0]);
+            if (style) {
+                lineColor = style.color;
+                lineClass = style.className;
+            }
+        }
+
+        // If no specific EARFCN matched, using defaultColor. 
+        // We should add a generic neon class if we want neon effect on custom colors?
+        // For now, if no earfcn match, use 'neon-red-pulse' but with custom color?
+        // Actually, the CSS classes enforce specific colors with !important.
+        // To allow custom colors for these classes, we should probably REMOVE !important in CSS. 
+        // OR we don't use the classes if the user customized the color widely?
+
+        // Strategy: 
+        // If it matches EARFCN, usage the specific class (which might be colored).
+        // If user changed the color in settings for "Blue 1320", they technically changed `connectionSettings.earfcn1320Color`.
+        // We pass this color to L.polyline.
+        // BUT the CSS class `.neon-blue-pulse` has `stroke: #3b82f6 !important;`. This will override the JS color.
+
+        // FIX: PROBABLY NEED TO GENERATE DYNAMIC STYLES OR REMOVE !important FROM CSS.
+        // For now, I will proceed. I might need to fix CSS later.
+        // Actually, I can use the `className` only for the animation/shadow, and `color` for the stroke IF I remove `stroke: ... !important` from CSS.
+        // That is the best approach for customization.
+
         const latlngs = [
             [tip.lat, tip.lng],
             [point.latitude, point.longitude]
         ];
 
         const polyline = L.polyline(latlngs, {
-            color: '#ff073a',
-            weight: 3,
-            opacity: 1,
-            dashArray: null, // Solid line for neon
-            className: 'neon-red-pulse',
+            color: lineColor,
+            weight: lineWeight,
+            opacity: lineOpacity,
+            dashArray: null,
+            className: lineClass, // Note: conflicts with customization if CSS has !important
             lineCap: 'round'
         });
 
         connectionLinesLayer.addLayer(polyline);
     });
+
+    // Highlights handled per-sector, usually specific color? 
+    // We keep sector highlight general or based on FIRST matched color if we want?
+    // Current default is red. Let's try to make sector highlight match the dominant EARFCN if possible?
+    // Or just keep red for sector. User didn't ask to change sector highlight color, just lines.
+    // I'll leave sector highlight as Red for now unless it looks weird.
+    // Actually, let's allow sector highlight to be dynamic too if there is a dominant EARFCN.
+    let sectorColor = '#ff073a';
+    let sectorClass = 'neon-sector-pulse';
+
+    // Pick first valid EARFCN from sector to color the sector itself?
+    if (sectorEarfcnValues.length > 0) {
+        // Check if any EARFCN gives a color
+        for (const val of sectorEarfcnValues) {
+            const valInt = parseInt(val);
+            if (valInt === 1320) { sectorColor = '#3b82f6'; sectorClass = 'neon-sector-pulse-blue'; break; }
+            if (valInt === 6300) { sectorColor = '#10b981'; sectorClass = 'neon-sector-pulse-green'; break; }
+            if (valInt === 3050) { sectorColor = '#ff073a'; sectorClass = 'neon-sector-pulse'; break; }
+        }
+    }
 
     // Highlight the Source Sector with Neon Pulse
     // Re-calculate polygon
@@ -2776,11 +2964,11 @@ function drawSectorToPoints(sector, site) {
     sectorPolyPoints.push(center);
 
     const matchPoly = L.polygon(sectorPolyPoints, {
-        color: '#ff073a',
-        fillColor: '#ff073a',
+        color: sectorColor,
+        fillColor: sectorColor,
         fillOpacity: 0.5,
         weight: 2,
-        className: 'neon-sector-pulse',
+        className: sectorClass,
         interactive: false,
         pane: 'neonPane'
     });
@@ -5230,17 +5418,13 @@ function renderMapLegend() {
 // Helper: Make Element Draggable
 function makeElementDraggable(elmnt) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    const header = elmnt.querySelector('.legend-header') || elmnt; // Drag via header if exists
-
-    // We can't attach to header here because header is re-created on each render.
-    // Instead, attach to element and check target, or attach to header inside render.
-    // Better: Attach mousedown to element, but check if target is within header.
+    const header = elmnt.querySelector('.legend-header') || elmnt.querySelector('.drag-handle') || elmnt;
 
     elmnt.onmousedown = dragMouseDown;
 
     function dragMouseDown(e) {
-        // Only drag if clicking the header
-        if (!e.target.closest('.legend-header')) return;
+        // Allow dragging via .legend-header or .drag-handle
+        if (!e.target.closest('.legend-header') && !e.target.closest('.drag-handle')) return;
 
         e = e || window.event;
         e.preventDefault();
@@ -5265,6 +5449,7 @@ function makeElementDraggable(elmnt) {
         elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
         // Remove 'right' property if it exists so left/top takes precedence
         elmnt.style.right = 'auto';
+        elmnt.style.bottom = 'auto'; // Also clear bottom if set
     }
 
     function closeDragElement() {
@@ -5676,4 +5861,130 @@ function showAlarmsModal(siteName, alarms) {
 
     container.innerHTML = tableHtml;
     modal.style.display = 'block';
+}
+
+// ==================== CONNECTION SETTINGS UI ====================
+
+function renderConnectionSettingsPanel() {
+    const container = document.body;
+
+    // Check if exists
+    if (document.getElementById('connectionSettingsPanel')) return;
+
+    // Create Panel
+    const panel = document.createElement('div');
+    panel.id = 'connectionSettingsPanel';
+    panel.className = 'settings-panel';
+
+    panel.innerHTML = `
+        <h4 id="connectionSettingsHeader">
+            Connection Settings
+            <span style="cursor: pointer;" onclick="document.getElementById('connectionSettingsPanel').style.display='none'">&times;</span>
+        </h4>
+        
+        <div class="settings-group">
+            <label>Line Thickness: <span id="weightValue">${connectionSettings.weight}px</span></label>
+            <div class="settings-control">
+                <input type="range" id="lineWeight" min="1" max="10" value="${connectionSettings.weight}">
+            </div>
+        </div>
+        
+        <div class="settings-group">
+            <label>Default Color</label>
+            <div class="settings-control">
+                <input type="color" id="defaultColor" value="${connectionSettings.defaultColor}">
+                <span>Color</span>
+            </div>
+        </div>
+        
+        <div class="settings-group">
+            <label>Styles by EARFCN</label>
+            
+            <div class="settings-control" style="margin-bottom: 5px;">
+                <input type="color" id="earfcn1320Color" value="${connectionSettings.earfcn1320Color}">
+                <span>1320 (Blue)</span>
+            </div>
+            
+            <div class="settings-control" style="margin-bottom: 5px;">
+                <input type="color" id="earfcn3050Color" value="${connectionSettings.earfcn3050Color}">
+                <span>3050 (Red)</span>
+            </div>
+            
+            <div class="settings-control">
+                <input type="color" id="earfcn6300Color" value="${connectionSettings.earfcn6300Color}">
+                <span>6300 (Green)</span>
+            </div>
+        </div>
+        
+        <div class="settings-actions">
+            <button class="btn-primary btn-sm" onclick="saveConnectionSettings()">Apply</button>
+            <button class="btn-secondary btn-sm" onclick="resetConnectionSettings()">Reset</button>
+        </div>
+    `;
+
+    container.appendChild(panel);
+
+    // Make Draggable
+    makeElementDraggable(document.getElementById('connectionSettingsPanel'), document.getElementById('connectionSettingsHeader'));
+
+    // Event Listeners for Live Preview
+    document.getElementById('lineWeight').addEventListener('input', (e) => {
+        document.getElementById('weightValue').innerText = e.target.value + 'px';
+    });
+}
+
+function saveConnectionSettings() {
+    if (document.getElementById('lineWeight')) connectionSettings.weight = document.getElementById('lineWeight').value;
+    if (document.getElementById('defaultColor')) connectionSettings.defaultColor = document.getElementById('defaultColor').value;
+    if (document.getElementById('earfcn1320Color')) connectionSettings.earfcn1320Color = document.getElementById('earfcn1320Color').value;
+    if (document.getElementById('earfcn3050Color')) connectionSettings.earfcn3050Color = document.getElementById('earfcn3050Color').value;
+    if (document.getElementById('earfcn6300Color')) connectionSettings.earfcn6300Color = document.getElementById('earfcn6300Color').value;
+
+    localStorage.setItem('siteSectorMapper_connectionSettings', JSON.stringify(connectionSettings));
+
+    if (connectionLinesLayer) {
+        connectionLinesLayer.clearLayers();
+        showNotification('Settings saved. Click a sector to redraw lines.', 'success');
+    }
+}
+
+function resetConnectionSettings() {
+    connectionSettings = {
+        weight: 3,
+        opacity: 1,
+        defaultColor: '#ff073a',
+        earfcn1320Color: '#3b82f6',
+        earfcn3050Color: '#ff073a',
+        earfcn6300Color: '#10b981'
+    };
+
+    // Update Inputs
+    if (document.getElementById('lineWeight')) document.getElementById('lineWeight').value = connectionSettings.weight;
+    if (document.getElementById('weightValue')) document.getElementById('weightValue').innerText = connectionSettings.weight + 'px';
+    if (document.getElementById('defaultColor')) document.getElementById('defaultColor').value = connectionSettings.defaultColor;
+    if (document.getElementById('earfcn1320Color')) document.getElementById('earfcn1320Color').value = connectionSettings.earfcn1320Color;
+    if (document.getElementById('earfcn3050Color')) document.getElementById('earfcn3050Color').value = connectionSettings.earfcn3050Color;
+    if (document.getElementById('earfcn6300Color')) document.getElementById('earfcn6300Color').value = connectionSettings.earfcn6300Color;
+
+    saveConnectionSettings();
+}
+
+function toggleConnectionSettings() {
+    const panel = document.getElementById('connectionSettingsPanel');
+    if (!panel) {
+        renderConnectionSettingsPanel();
+        document.getElementById('connectionSettingsPanel').style.display = 'block';
+    } else {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+
+        // Ensure inputs are synced when opening
+        if (panel.style.display === 'block') {
+            if (document.getElementById('lineWeight')) document.getElementById('lineWeight').value = connectionSettings.weight;
+            if (document.getElementById('weightValue')) document.getElementById('weightValue').innerText = connectionSettings.weight + 'px';
+            if (document.getElementById('defaultColor')) document.getElementById('defaultColor').value = connectionSettings.defaultColor;
+            if (document.getElementById('earfcn1320Color')) document.getElementById('earfcn1320Color').value = connectionSettings.earfcn1320Color;
+            if (document.getElementById('earfcn3050Color')) document.getElementById('earfcn3050Color').value = connectionSettings.earfcn3050Color;
+            if (document.getElementById('earfcn6300Color')) document.getElementById('earfcn6300Color').value = connectionSettings.earfcn6300Color;
+        }
+    }
 }

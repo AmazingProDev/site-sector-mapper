@@ -484,7 +484,7 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: url('bg_login.jpg') no-repeat center center fixed;
+    background: url('bg_login_v3.png') no-repeat center center fixed;
     background-size: cover;
     display: flex;
     justify-content: center;
@@ -1225,8 +1225,8 @@ body {
 /* Measure Tool Popup */
 .measure-popup .leaflet-popup-content-wrapper {
     background: rgba(15, 23, 42, 0.65);
-    backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     border: 2px solid #f59e0b;
     border-radius: 12px;
     padding: 0;
@@ -1363,6 +1363,7 @@ body {
     font-size: 14px !important;
     padding: 6px 10px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
 }
 
@@ -1421,8 +1422,8 @@ body {
     left: 0;
     right: 0;
     background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     margin-top: 4px;
@@ -1632,4 +1633,353 @@ body {
 
 .modal-width-sm {
     max-width: 400px;
+}
+
+/* Lint Fix Utilities */
+.hidden {
+    display: none !important;
+}
+
+.ml-10 {
+    margin-left: 10px;
+}
+
+.gap-10 {
+    gap: 10px;
+}
+
+.h-40 {
+    height: 40px;
+}
+
+.w-60 {
+    width: 60px;
+}
+
+.stop-color-1 {
+    stop-color: #6366f1;
+    stop-opacity: 1;
+}
+
+.stop-color-2 {
+    stop-color: #8b5cf6;
+    stop-opacity: 1;
+}
+
+.custom-props-section {
+    margin-top: 15px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+}
+
+.custom-props-label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.btn-add-prop {
+    width: 100%;
+    margin-top: 5px;
+    font-size: 0.9em;
+
+}
+
+/* Blue Neon Pulse Animation */
+.neon-red-pulse {
+    /* stroke: #ff073a !important; removed to allow dynamic color */
+    animation: neon-pulse 1.5s ease-in-out infinite alternate !important;
+}
+
+/* Blue Neon Pulse Animation */
+@keyframes neon-pulse-blue {
+    0% {
+        opacity: 0.7;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+    }
+
+    50% {
+        opacity: 1;
+        stroke-width: 5px;
+        filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.9));
+    }
+
+    100% {
+        opacity: 0.7;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+    }
+}
+
+.neon-blue-pulse {
+    /* stroke: #3b82f6 !important; */
+    animation: neon-pulse-blue 1.5s ease-in-out infinite alternate !important;
+}
+
+/* Green Neon Pulse Animation */
+@keyframes neon-pulse-green {
+    0% {
+        opacity: 0.7;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.5));
+    }
+
+    50% {
+        opacity: 1;
+        stroke-width: 5px;
+        filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.9));
+    }
+
+    100% {
+        opacity: 0.7;
+        stroke-width: 3px;
+        filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.5));
+    }
+}
+
+.neon-green-pulse {
+    /* stroke: #10b981 !important; */
+    animation: neon-pulse-green 1.5s ease-in-out infinite alternate !important;
+}
+
+/* Sector specific pulses */
+.neon-sector-pulse-blue {
+    fill: #3b82f6 !important;
+    stroke: #3b82f6 !important;
+    animation: neon-pulse-blue 1.5s ease-in-out infinite alternate !important;
+}
+
+.neon-sector-pulse-green {
+    fill: #10b981 !important;
+    stroke: #10b981 !important;
+    animation: neon-pulse-green 1.5s ease-in-out infinite alternate !important;
+}
+
+/* Connection Settings Panel */
+.settings-panel {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    background: rgba(30, 41, 59, 0.95);
+    /* Match Legend */
+    color: #e2e8f0;
+    /* Match Legend */
+    padding: 0;
+    /* Remove padding here, use inner content or match legend header/content structure if needed. Or just padding 15 is fine but with border radius */
+    padding: 15px;
+    /* Restoration for simplicity */
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    z-index: 1000;
+    width: 280px;
+    font-size: 13px;
+    /* Slightly smaller to match legend often */
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: none;
+    transition: all 0.2s ease;
+}
+
+.settings-panel:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.settings-panel h4 {
+    margin: 0 0 15px 0;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.settings-group {
+    margin-bottom: 15px;
+}
+
+.settings-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #94a3b8;
+    /* Muted text */
+    font-weight: 500;
+    font-size: 12px;
+}
+
+.settings-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settings-control span {
+    color: #e2e8f0;
+}
+
+.settings-control input[type="color"] {
+    border: none;
+    width: 30px;
+    height: 20px;
+    cursor: pointer;
+    background: none;
+    padding: 0;
+}
+
+.settings-control input[type="range"] {
+    flex: 1;
+    /* Custom range styling optional but keeping default is safer for now, or match dark theme */
+    accent-color: #3b82f6;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.settings-actions .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.settings-actions .btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.settings-actions .btn-primary:hover {
+    background: #2563eb;
+}
+
+.settings-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+}
+
+.settings-actions .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Collapsible Map Controls */
+.map-controls {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    /* Align to left */
+    gap: 5px;
+    pointer-events: none;
+    /* Critical: Allow clicks to pass through to map */
+}
+
+.drag-handle {
+    width: 100%;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    cursor: move;
+    pointer-events: auto;
+    margin-bottom: 5px;
+    color: #64748b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.drag-handle:hover {
+    background: #fff;
+    color: #3b82f6;
+}
+
+/* Re-enable pointer events for interactive children */
+.toggle-controls-btn,
+.controls-wrapper,
+.search-container-styled {
+    pointer-events: auto;
+}
+
+.controls-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 500px;
+    /* Arbitrary large height */
+    opacity: 1;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+.map-controls.collapsed .controls-wrapper {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    pointer-events: none;
+}
+
+.toggle-controls-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+    margin-bottom: 5px;
+}
+
+.toggle-controls-btn:hover {
+    background: #fff;
+}
+
+.map-controls.collapsed .toggle-controls-btn svg {
+    transform: rotate(180deg);
+}
+
+/* Purple Button Style for Names */
+#toggleNamesBtn,
+#toggleSectorNamesBtn {
+    background-color: #a78bfa;
+    /* Violet-400 equivalent */
+    color: white;
+    border: none;
+}
+
+#toggleNamesBtn:hover,
+#toggleSectorNamesBtn:hover {
+    background-color: #8b5cf6;
+    /* Violet-500 equivalent */
+}
+
+#toggleNamesBtn.active,
+#toggleSectorNamesBtn.active {
+    background-color: #7c3aed;
+    /* Violet-600 */
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
