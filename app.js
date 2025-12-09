@@ -28,6 +28,8 @@ let hiddenKmlGroups = new Set(); // Track hidden KML groups
 let hiddenSiteGroups = new Set(); // Track hidden Site groups
 let activeThematicSettings = { sites: null, kml: null }; // Independent settings for Sites and KML
 let alarmsData = []; // Store imported alarm data
+let connectionLinesLayer = null; // Track connection lines (LayerGroup)
+let isConnectionLinesEnabled = false; // Toggle state
 
 // Helper to generate unique ID
 function generateId() {
@@ -136,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function init() {
     // Map is already initialized in global scope
     initializeEventListeners();
-    loadFromLocalStorage();
+    loadData();
 
     // Sync color inputs
     // Sync color inputs (Point Form)
@@ -238,6 +240,9 @@ function initializeMap() {
     // Initialize sectors layer
     sectorsLayer = L.layerGroup();
     map.addLayer(sectorsLayer);
+
+    // Initialize Connection Lines Layer
+    connectionLinesLayer = L.layerGroup().addTo(map);
 
     // Initialize Draw Controls
     const drawnItems = new L.FeatureGroup();
@@ -596,6 +601,9 @@ function initializeEventListeners() {
 
     // Bulk Edit
     const bulkEditModal = document.getElementById('bulkEditModal');
+
+    // Connection Line Toggle
+    setupConnectionLineToggle();
     document.getElementById('bulkEditBtn').addEventListener('click', () => {
         bulkEditModal.style.display = 'block';
     });
@@ -1108,7 +1116,7 @@ async function handleManualSubmit(e) {
     }
 
     // Save and update
-    saveToLocalStorage();
+    saveData();
     updateUI();
     updateMapMarkers();
     showSitesList();
@@ -1232,6 +1240,52 @@ function processCSVFile(file) {
     });
 }
 
+function normalizeCSVHeaders(keys) {
+    const headerMap = {};
+    const standardMappings = {
+        'site name': 'site_name',
+        'site_name': 'site_name',
+        'name': 'site_name',
+        'latitude': 'latitude',
+        'lat': 'latitude',
+        'longitude': 'longitude',
+        'lon': 'longitude',
+        'lng': 'longitude',
+        'description': 'description',
+        'sector name': 'sector_name',
+        'sector_name': 'sector_name',
+        'azimuth': 'azimuth',
+        'bearing': 'azimuth',
+        'azimut': 'azimuth', // Added French spelling
+        'beamwidth': 'beamwidth',
+        'range': 'range',
+        'radius': 'range',
+        'technology': 'technology',
+        'tech': 'technology',
+        'frequency': 'frequency',
+        'freq': 'frequency',
+        'color': 'color',
+        'opacity': 'opacity',
+        // New Mappings
+        'physical_cell_id': 'pci',
+        'physical cell id': 'pci',
+        'pci': 'pci',
+        'sc physical cell id': 'pci',
+        'cell_name': 'cell_name',
+        'cell name': 'cell_name',
+        'cellname': 'cell_name',
+        'cellid': 'cell_name'
+    };
+
+    keys.forEach(key => {
+        const normalizedKey = key.toLowerCase().trim();
+        if (standardMappings[normalizedKey]) {
+            headerMap[key] = standardMappings[normalizedKey];
+        }
+    });
+    return headerMap;
+}
+
 function processImportData(rawData) {
     if (!rawData || rawData.length === 0) {
         showNotification('No data found in file', 'error');
@@ -1273,6 +1327,9 @@ function showCSVPreview(data) {
     const preview = document.getElementById('csvPreview');
     const content = document.getElementById('csvPreviewContent');
 
+    // ... rest of function ...
+    // (Simplifying replacement for brevity, keeping original logic mostly)
+
     let html = `<p><strong>${data.length} sites</strong> found in CSV</p><ul style="list-style: none; padding: 0;">`;
 
     const uniqueSites = {};
@@ -1304,6 +1361,7 @@ function showCSVPreview(data) {
 }
 
 function renderPointsList(filter = '') {
+    // ... existing function ...
     const container = document.getElementById('pointsListContainer');
     if (!container) return;
 
@@ -1394,9 +1452,22 @@ function importCsvData() {
         // Add sector if azimuth is present (and valid)
         const azimuth = parseNumber(row.azimuth);
 
-        // Only add sector if we have at least an azimuth (or if it's explicitly 0)
-        // If row has no azimuth column, we might just be importing a site point
+        // Only add sector if we have at least an azimuth
         if (azimuth !== null) {
+            // identifying Extra Props
+            const standardProps = ['site_name', 'latitude', 'longitude', 'description', 'sector_name', 'azimuth', 'beamwidth', 'range', 'color', 'opacity', 'technology', 'frequency', 'pci', 'cell_name'];
+            const customProperties = [];
+
+            Object.keys(row).forEach(key => {
+                // Check if it's NOT a standard prop (using normalized keys from earlier might be needed,
+                // but here 'row' has keys from headerMap or original if not mapped.
+                // The headerMap normalized them. So we check against those.
+                // Actually, let's just exclude the ones we explicitly used.
+                if (!standardProps.includes(key)) {
+                    customProperties.push({ name: key, value: row[key] });
+                }
+            });
+
             sitesMap[siteName].sectors.push({
                 name: row.sector_name || '',
                 azimuth: azimuth,
@@ -1405,7 +1476,10 @@ function importCsvData() {
                 color: row.color || '#3388ff',
                 opacity: parseNumber(row.opacity) || 0.5,
                 technology: row.technology || '',
-                frequency: row.frequency || ''
+                frequency: row.frequency || '',
+                pci: row.pci || '',
+                cell_name: row.cell_name || '',
+                customProperties: customProperties
             });
         }
     });
@@ -1415,7 +1489,7 @@ function importCsvData() {
     sites.push(...newSites);
 
     // Save and update
-    saveToLocalStorage();
+    saveData();
     updateUI();
 
     // Reset CSV
@@ -1424,7 +1498,6 @@ function importCsvData() {
     // Return to list view
     showSitesList();
 
-    console.log('UpdateMapMarkers call from importCsvData');
     // Update map LAST to ensure it fits bounds correctly after UI settles
     updateMapMarkers({ fitBounds: true });
 
@@ -1654,6 +1727,38 @@ function parseKml(xmlText) {
                             }
                         }
 
+                        // 5. Parse Text-based Key-Value pairs (e.g. "Key = Value<br>")
+                        if (description) {
+                            // console.log('Parsing description for text attributes...'); // Debug
+                            const textLines = description.split(/<br\s*\/?>/i);
+                            textLines.forEach(line => {
+                                // Simple Split by '='
+                                // We need to be careful not to split attributes inside HTML tags if mixed
+                                // But the user sample shows clean lines: "Site ID = CoMPT..."
+
+                                // Regex to match "Key = Value" where Key and Value don't contain < or > (to avoid HTML tags)
+                                // And ignore lines that look like HTML tags
+                                if (line.trim().startsWith('<')) return;
+
+                                const parts = line.split('=');
+                                if (parts.length >= 2) {
+                                    const key = parts[0].trim();
+                                    // Join the rest in case value has =
+                                    const value = parts.slice(1).join('=').trim();
+
+                                    // Validate
+                                    if (key && value) {
+                                        // Check if already exists
+                                        if (!customProperties.some(p => p.name === key)) {
+                                            customProperties.push({ name: key, value: value });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+
+                        if (customProperties.length > 0) console.log('Parsed properties for point:', name, customProperties); // Debug
+
                         parsedPoints.push({
                             name,
                             description,
@@ -1695,7 +1800,7 @@ async function importKmlData() {
             return;
         }
 
-        // console.log(`Found ${kmlData.length} items to import.`);
+        // console.log(`Found ${ kmlData.length } items to import.`);
         // console.log('First item:', kmlData[0]);
 
         // Process in chunks to avoid blocking UI
@@ -1705,7 +1810,7 @@ async function importKmlData() {
 
         // Create new sites array
         const newSites = kmlData.map((point, index) => ({
-            id: `kml-${Date.now()}-${index}`,
+            id: `kml - ${Date.now()} -${index} `,
             name: point.name,
             latitude: point.latitude,
             longitude: point.longitude,
@@ -1722,17 +1827,14 @@ async function importKmlData() {
             customProperties: point.customProperties || []
         }));
 
-        // console.log(`Created ${newSites.length} new site objects`);
+        // console.log(`Created ${ newSites.length } new site objects`);
 
         // Push to global sites
         points.push(...newSites);
 
-        // console.log(`Added to global points. Total points: ${points.length}`);
+        // console.log(`Added to global points.Total points: ${ points.length } `);
 
-        if (!saveToLocalStorage()) {
-            showNotification('Storage full! Data loaded for this session only.', 'warning');
-            console.warn('Storage quota exceeded. Data not saved to localStorage.');
-        }
+        saveData();
 
         // Update UI
         updateUI();
@@ -1757,7 +1859,7 @@ async function importKmlData() {
         // Refresh thematic attributes
         updateThematicAttributes();
 
-        showNotification(`Successfully imported ${newSites.length} points from ${currentKmlFilename}`, 'success');
+        showNotification(`Successfully imported ${newSites.length} points from ${currentKmlFilename} `, 'success');
         // console.log('Import complete successfully');
 
     } catch (error) {
@@ -1814,7 +1916,7 @@ function exportKmlAttributes() {
                 // Escape quotes in value
                 const safeValue = prop.value.replace(/"/g, '""');
                 const safeName = prop.name.replace(/"/g, '""');
-                csvContent += `${point.latitude},${point.longitude},"${safeName}","${safeValue}"\n`;
+                csvContent += `${point.latitude},${point.longitude}, "${safeName}", "${safeValue}"\n`;
             });
         }
     });
@@ -1843,7 +1945,7 @@ function showKmlPreview(data) {
         return;
     }
 
-    let html = `<p><strong>${data.length} points</strong> found in KML</p><ul style="list-style: none; padding: 0;">`;
+    let html = `< p > <strong>${data.length} points</strong> found in KML</p > <ul style="list-style: none; padding: 0;">`;
 
     let count = 0;
     for (const point of data) {
@@ -2255,7 +2357,14 @@ function renderVisibleSectors() {
             // Thematic Override
             if (typeof activeThematicSettings !== 'undefined' && activeThematicSettings.sites) {
                 const settings = activeThematicSettings.sites;
-                const val = sector[settings.attribute];
+                let val;
+                if (settings.isCustom) {
+                    const prop = sector.customProperties?.find(p => p.name === settings.attribute);
+                    val = prop ? prop.value : null;
+                } else {
+                    val = sector[settings.attribute];
+                }
+
                 if (settings.type === 'categorical') {
                     color = settings.mapping[val] || '#999999';
                 } else if (settings.type === 'numerical') {
@@ -2315,6 +2424,13 @@ function renderVisibleSectors() {
             polygon.bindPopup(popupContent);
 
             polygon.on('click', (e) => {
+                // Connection Line Logic
+                if (isConnectionLinesEnabled) {
+                    L.DomEvent.stopPropagation(e);
+                    drawSectorToPoints(sector, site);
+                    return;
+                }
+
                 highlightSiteInList(site.id);
 
                 // Check for alarms
@@ -2380,6 +2496,199 @@ function getTechnologyColor(technology) {
     return '#ec4899';
 }
 
+// ==================== CONNECTION LINE LOGIC ====================
+
+function drawConnectionLine(point) {
+    if (!isConnectionLinesEnabled) return;
+
+    // 1. Clear existing line
+    if (connectionLinesLayer) {
+        connectionLinesLayer.clearLayers();
+    }
+
+    if (!point) return;
+
+    // 2. Identify "Cell Name" from point
+    let cellName = null;
+    if (point.customProperties) {
+        const prop = point.customProperties.find(p =>
+            p.name.toLowerCase().includes('cell') && p.name.toLowerCase().includes('name')
+        );
+        if (prop) cellName = prop.value;
+    }
+    // Also check top level if not found
+    if (!cellName && point.cellName) cellName = point.cellName; // If we ever stored it there
+    if (!cellName && point.name) cellName = point.name; // Fallback? Maybe risky. Let's stick to properties.
+
+    if (!cellName) {
+        console.log('No Cell Name found for connection line');
+        return;
+    }
+
+    // 3. Find Matching Sector
+    // Normalize target cell name
+    const targetName = String(cellName).trim().toLowerCase();
+
+    let matchedSector = null;
+    let matchedSite = null;
+
+    // Iterate all sites
+    for (const site of sites) {
+        if (site.sectors) {
+            for (const sector of site.sectors) {
+                // Check standard cell_name
+                if (sector.cell_name && String(sector.cell_name).trim().toLowerCase() === targetName) {
+                    matchedSector = sector;
+                    matchedSite = site;
+                    break;
+                }
+                // Check sector name
+                if (sector.name && String(sector.name).trim().toLowerCase() === targetName) {
+                    matchedSector = sector;
+                    matchedSite = site;
+                    break;
+                }
+                // Check custom properties
+                if (sector.customProperties) {
+                    const cProp = sector.customProperties.find(p =>
+                        p.name.toLowerCase().includes('cell') && p.name.toLowerCase().includes('name') &&
+                        String(p.value).trim().toLowerCase() === targetName
+                    );
+                    if (cProp) {
+                        matchedSector = sector;
+                        matchedSite = site;
+                        break;
+                    }
+                }
+            }
+        }
+        if (matchedSector) break;
+    }
+
+    if (matchedSector && matchedSite) {
+        // 4. Calculate Sector Tip
+        // Destination from site    // 4. Draw Line
+        try {
+            const sectorTip = destination(matchedSite.latitude, matchedSite.longitude, matchedSector.azimuth, matchedSector.range);
+
+            const latlngs = [
+                [point.latitude, point.longitude],
+                [sectorTip.lat, sectorTip.lng]
+            ];
+
+            // Clear existing lines (Single selection logic)
+            connectionLinesLayer.clearLayers();
+
+            const polyline = L.polyline(latlngs, {
+                color: '#ef4444',
+                weight: 4,
+                opacity: 0.9,
+                dashArray: '10, 10',
+                className: 'connection-line-flow',
+                lineCap: 'round'
+            });
+
+            connectionLinesLayer.addLayer(polyline);
+
+            console.log(`Drawn line from ${cellName} to ${matchedSector.name || 'Sector'}`);
+        } catch (e) {
+            console.error('Error drawing line:', e);
+        }
+    } else {
+        console.log('No matching sector found for cell name:', cellName);
+    }
+}
+
+function drawSectorToPoints(sector, site) {
+    if (!isConnectionLinesEnabled) return;
+
+    // Clear previous lines
+    if (connectionLinesLayer) connectionLinesLayer.clearLayers();
+
+    // Determine target identifiers
+    const targets = [];
+    if (sector.cell_name) targets.push(String(sector.cell_name).trim().toLowerCase());
+    if (sector.name) targets.push(String(sector.name).trim().toLowerCase());
+
+    if (targets.length === 0) return;
+
+    // Find all matching KML points
+    const matches = points.filter(p => {
+        if (p.type !== 'kml_point') return false;
+
+        let pName = null;
+        // Check custom property "Cell Name"
+        if (p.customProperties) {
+            const prop = p.customProperties.find(prop =>
+                prop.name.toLowerCase().includes('cell') && prop.name.toLowerCase().includes('name')
+            );
+            if (prop) pName = String(prop.value).trim().toLowerCase();
+        }
+        // Check top level
+        if (!pName && p.cellName) pName = String(p.cellName).trim().toLowerCase();
+
+        return pName && targets.includes(pName);
+    });
+
+    if (matches.length === 0) {
+        showNotification('No matching KML points found for this sector', 'info');
+        return;
+    }
+
+    // Calculate Sector Tip
+    const tip = destination(site.latitude, site.longitude, sector.azimuth, sector.range);
+
+    // Draw lines
+    matches.forEach(point => {
+        const latlngs = [
+            [tip.lat, tip.lng],
+            [point.latitude, point.longitude]
+        ];
+
+        const polyline = L.polyline(latlngs, {
+            color: '#ef4444',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '10, 10',
+            className: 'connection-line-flow',
+            lineCap: 'round'
+        });
+
+        connectionLinesLayer.addLayer(polyline);
+    });
+
+    showNotification(`Connected to ${matches.length} matching kml points`, 'success');
+}
+
+function setupConnectionLineToggle() {
+    const btn = document.getElementById('toggleConnectionLinesBtn');
+    const txt = document.getElementById('connectionBtnText');
+
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        isConnectionLinesEnabled = !isConnectionLinesEnabled;
+
+        if (isConnectionLinesEnabled) {
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-secondary');
+            if (txt) txt.textContent = 'Lines: On';
+            showNotification('Map Connection Lines Enabled', 'success');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-secondary');
+            if (txt) txt.textContent = 'Lines: Off';
+            showNotification('Map Connection Lines Disabled', 'info');
+
+            // Clear existing line immediately
+            if (connectionLinesLayer) {
+                connectionLinesLayer.clearLayers();
+            }
+        }
+    });
+}
+
+// Update Map Markers 
 function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, filteredPoints = null) {
     markersLayer.clearLayers();
     if (pointsLayer) pointsLayer.clearLayers();
@@ -2473,6 +2782,9 @@ function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, f
             if (isMeasuring) {
                 L.DomEvent.stopPropagation(e);
                 handleMeasureClick(e.latlng);
+            } else if (isConnectionLinesEnabled) {
+                // Only draw connection line, do not show popup
+                drawConnectionLine(point);
             } else {
                 highlightSiteInList(point.id); // Highlight in list
                 L.popup()
@@ -2741,6 +3053,7 @@ function updateUI() {
     updateSiteCounter();
     renderSitesList();
     renderKmlList();
+    updateThematicAttributes();
 }
 
 
@@ -3337,7 +3650,7 @@ async function handleEditSiteSubmit(e) {
             }
         }
 
-        saveToLocalStorage();
+        saveData();
         updateMapMarkers({ fitBounds: false });
         renderPointsList(); // Update points list if needed
         closeModal();
@@ -3533,8 +3846,9 @@ function clearAllSites() {
         currentKmlFilename = '';
 
         // Clear Storage
-        localStorage.removeItem('siteSectorMapper_sites');
-        localStorage.removeItem('siteSectorMapper_points');
+        // localStorage.removeItem('siteSectorMapper_sites');
+        // localStorage.removeItem('siteSectorMapper_points');
+        clearDB().then(() => console.log('DB Cleared')).catch(err => console.error('Error clearing DB', err));
 
         // Clear Map
         if (markersLayer) markersLayer.clearLayers();
@@ -3572,7 +3886,107 @@ function saveToLocalStorage() {
     }
 }
 
-function loadFromLocalStorage() {
+// ==================== INDEXEDDB PERSISTENCE ====================
+
+let db = null;
+const DB_NAME = 'SiteMapperDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'data';
+
+function setupDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME);
+            }
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            resolve(db);
+        };
+
+        request.onerror = (event) => {
+            console.error('IndexedDB error:', event.target.errorCode);
+            reject(event.target.errorCode);
+        };
+    });
+}
+
+function saveToDB(key, value) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject('DB not initialized');
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put(value, key);
+
+        request.onsuccess = () => resolve();
+        request.onerror = (event) => reject(event.target.error);
+    });
+}
+
+function getFromDB(key) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject('DB not initialized');
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(key);
+
+        request.onsuccess = (event) => resolve(event.target.result);
+        request.onerror = (event) => reject(event.target.error);
+    });
+}
+
+function clearDB() {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject('DB not initialized');
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.clear();
+
+        request.onsuccess = () => resolve();
+        request.onerror = (event) => reject(event.target.error);
+    });
+}
+
+async function saveData() {
+    try {
+        if (!db) await setupDB();
+        await saveToDB('sites', sites);
+        await saveToDB('points', points);
+        // Also save metadata if needed
+        console.log('Data saved to IndexedDB');
+    } catch (e) {
+        console.error('Error saving data to DB:', e);
+    }
+}
+
+async function loadData() {
+    try {
+        await setupDB();
+        const storedSites = await getFromDB('sites');
+        if (storedSites) sites = storedSites;
+
+        const storedPoints = await getFromDB('points');
+        if (storedPoints) points = storedPoints;
+
+        if (sites.length > 0 || points.length > 0) {
+            updateUI(); // Refresh UI with loaded data
+            updateMapMarkers({ fitBounds: true });
+            showNotification(`Restored ${sites.length} sites and ${points.length} points`, 'info');
+        }
+
+        loadThematicSettings();
+    } catch (e) {
+        console.error('Error loading data from DB:', e);
+    }
+}
+
+// Deprecated: loadFromLocalStorage (kept for reference but unused)
+function loadFromLocalStorage_OLD() {
     const storedSites = localStorage.getItem('siteSectorMapper_sites');
     if (storedSites) {
         try {
@@ -3850,7 +4264,7 @@ async function deletePoint(pointId) {
         // await deleteAirtableRecord(pointId);
 
         points = points.filter(p => p.id != pointId);
-        saveToLocalStorage();
+        saveData();
         updateMapMarkers({ fitBounds: false });
         updateUI();
         renderPointsList();
@@ -4050,8 +4464,28 @@ function updateThematicAttributes() {
     naOption.textContent = 'N#A';
     attributeSelect.appendChild(naOption);
 
-    // Scan for Custom Properties in KML points
+    // Scan for Custom Properties in KML points AND Site Sectors
     const kmlPoints = points.filter(p => p.type === 'kml_point');
+
+    // Collect unique keys from both sources
+    const kmlKeys = new Set();
+    kmlPoints.forEach(p => {
+        if (p.customProperties) {
+            p.customProperties.forEach(prop => kmlKeys.add(prop.name));
+        }
+    });
+
+    // Collect keys from Sites (Sectors)
+    const siteKeys = new Set();
+    sites.forEach(site => {
+        if (site.sectors) {
+            site.sectors.forEach(sector => {
+                if (sector.customProperties) {
+                    sector.customProperties.forEach(prop => siteKeys.add(prop.name));
+                }
+            });
+        }
+    });
 
     // Only populate if we have KML points
     if (kmlPoints.length > 0) {
@@ -4075,17 +4509,81 @@ function updateThematicAttributes() {
             }
         });
 
-        if (customKeys.size > 0) {
+        if (kmlKeys.size > 0) {
             const separator = document.createElement('option');
             separator.disabled = true;
             separator.textContent = '--- Custom Attributes ---';
             attributeSelect.appendChild(separator);
 
-            Array.from(customKeys).sort().forEach(key => {
+            Array.from(kmlKeys).sort().forEach(key => {
                 const el = document.createElement('option');
                 el.value = `custom:${key}`;
                 el.textContent = key;
                 attributeSelect.appendChild(el);
+            });
+        }
+    }
+
+    // UPDATE SITE ATTRIBUTE SELECT AS WELL
+    const siteAttributeSelect = document.getElementById('siteAttribute');
+    if (siteAttributeSelect) {
+        // Keep existing hardcoded options, but append dynamic ones
+        // First, remove any previously added dynamic options (marked with class 'dynamic-opt')
+        // Actually, simpler to rebuild or check existing.
+        // Let's just append if not exists.
+
+        // Clear only dynamic options if possible? Or just rebuild bottom part.
+        // Let's clear and re-add standard opts to be safe? 
+        // No, standard opts are in HTML. 
+        // Let's remove any validation-added extensions first.
+
+        // For SIMPLICITY: We will append. If we run this multiple times, we should clear previous custom opts.
+        // Identifying them by value prefix 'custom:' is easiest.
+        Array.from(siteAttributeSelect.options).forEach(opt => {
+            if (opt.value.startsWith('custom:')) {
+                opt.remove();
+            }
+        });
+
+        // Add Standard Optional Attributes (PCI, Cell Name)
+        const standardOptional = [
+            { value: 'pci', text: 'Physical Cell ID (PCI)' },
+            { value: 'cell_name', text: 'Cell Name' }
+        ];
+
+        standardOptional.forEach(opt => {
+            let exists = false;
+            Array.from(siteAttributeSelect.options).forEach(o => {
+                if (o.value === opt.value) exists = true;
+            });
+
+            if (!exists) {
+                const el = document.createElement('option');
+                el.value = opt.value;
+                el.textContent = opt.text;
+                siteAttributeSelect.appendChild(el);
+            }
+        });
+
+        if (siteKeys.size > 0) {
+            // Check if separator exists
+            let hasSep = false;
+            Array.from(siteAttributeSelect.options).forEach(opt => {
+                if (opt.textContent === '--- Custom Attributes ---') hasSep = true;
+            });
+
+            if (!hasSep) {
+                const separator = document.createElement('option');
+                separator.disabled = true;
+                separator.textContent = '--- Custom Attributes ---';
+                siteAttributeSelect.appendChild(separator);
+            }
+
+            Array.from(siteKeys).sort().forEach(key => {
+                const el = document.createElement('option');
+                el.value = `custom:${key}`;
+                el.textContent = key;
+                siteAttributeSelect.appendChild(el);
             });
         }
     }
@@ -4143,7 +4641,48 @@ function applyThematicAnalysis() {
         activeThematicSettings.kml = generateThematicSettings('kml', kmlAttribute);
     }
 
-    // 3. Apply & Render
+    // 3. LEGEND SYNCHRONIZATION
+    // If both active, check if they are "equivalent" attributes and unify their legends
+    if (activeThematicSettings.sites && activeThematicSettings.kml) {
+        const siteAttr = activeThematicSettings.sites.attributeName.toLowerCase().replace(/_/g, ' ');
+        const kmlAttr = activeThematicSettings.kml.attributeName.toLowerCase().replace(/_/g, ' ');
+
+        // Equivalence Heuristic
+        // 1. Exact Name Match
+        // 2. "SC " prefix (SC Physical Cell ID vs Physical Cell ID)
+        // 3. Aliases (PCI <-> Physical Cell ID)
+
+        let isEquivalent = false;
+
+        if (siteAttr === kmlAttr) isEquivalent = true;
+        else if (siteAttr.replace('sc ', '') === kmlAttr.replace('sc ', '')) isEquivalent = true;
+        else if ((siteAttr === 'pci' && kmlAttr.includes('physical cell id')) || (kmlAttr === 'pci' && siteAttr.includes('physical cell id'))) isEquivalent = true;
+        else if (siteAttr.includes('cell') && siteAttr.includes('name') && kmlAttr.includes('cell') && kmlAttr.includes('name')) isEquivalent = true;
+
+        if (isEquivalent && activeThematicSettings.sites.type === 'categorical' && activeThematicSettings.kml.type === 'categorical') {
+            const allValues = new Set([
+                ...activeThematicSettings.sites.uniqueValues,
+                ...activeThematicSettings.kml.uniqueValues
+            ]);
+            const sortedValues = Array.from(allValues).sort();
+
+            // Generate Unified Mapping
+            const mapping = {};
+            const palette = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+
+            sortedValues.forEach((val, index) => {
+                mapping[val] = palette[index % palette.length];
+            });
+
+            // Apply to both
+            activeThematicSettings.sites.mapping = mapping;
+            activeThematicSettings.sites.uniqueValues = sortedValues; // Show full legend for context
+            activeThematicSettings.kml.mapping = mapping;
+            activeThematicSettings.kml.uniqueValues = sortedValues;
+        }
+    }
+
+    // 4. Apply & Render
     renderVisibleSectors();
     updateMapMarkers({ fitBounds: false });
     renderThematicLegend();
@@ -4191,7 +4730,8 @@ function generateThematicSettings(source, attribute) {
 
     dataItems.forEach(item => {
         let val;
-        if (source === 'kml' && isCustom) {
+        if (isCustom) {
+            // Handle both KML and Site Sectors
             const prop = item.customProperties?.find(p => p.name === attributeName);
             val = prop ? prop.value : null;
         } else {
@@ -4208,18 +4748,26 @@ function generateThematicSettings(source, attribute) {
     if (values.length === 0) return null;
 
     // Determine Type (Numerical vs Categorical)
-    const isNumerical = values.every(v => !isNaN(parseFloat(v)));
+    // Use parseNumber to check if values are numerical
+    const isNumerical = values.every(v => parseNumber(v) !== null);
     let type = isNumerical && uniqueValues.size > 5 ? 'numerical' : 'categorical'; // Heuristic
 
     // Force categorical for certain attributes
-    if (['technology', 'name', 'group'].includes(attributeName)) {
+    if (['technology', 'name', 'group', 'sc physical cell id', 'physical cell id', 'pci', 'cell name', 'cell_name'].includes(attributeName.toLowerCase())) {
         type = 'categorical';
     }
 
     // Force numerical for known numerical attributes
     const attrLower = attributeName.toLowerCase();
-    if (attrLower.includes('throughput') || attrLower.includes('couverture') || attrLower.includes('rsrp') || attrLower.includes('rxlev') || attrLower.includes('rscp')) {
+    if (attrLower.includes('throughput') || attrLower.includes('couverture') || attrLower.includes('rsrp') || attrLower.includes('rxlev') || attrLower.includes('rscp') || attrLower.includes('sinr') || attrLower.includes('rsrq') || attrLower.includes('earfcn')) {
         type = 'numerical';
+    }
+
+    // EARFCN is usually categorical in practice (frequency band), but can be numerical logic. 
+    // Let's treat EARFCN as Categorical unless it has a wide range, but user asked for analysis.
+    // Usually EARFCN is better as categorical to see distinct carriers.
+    if (attrLower.includes('earfcn')) {
+        type = 'categorical';
     }
 
     const settings = {
@@ -4234,13 +4782,13 @@ function generateThematicSettings(source, attribute) {
     };
 
     if (type === 'numerical') {
-        const numValues = values.map(v => parseFloat(v));
+        // Use parseNumber to robustly parse values (handles commas)
+        const numValues = values.map(v => parseNumber(v)).filter(v => v !== null);
         const min = Math.min(...numValues);
         const max = Math.max(...numValues);
 
         // Default Ranges Logic
         let ranges = [];
-        // attrLower is already defined above
         console.log('Generating settings for attribute:', attributeName, 'Lower:', attrLower);
 
         if (attrLower.includes('throughput') || attrLower.includes('http download')) {
@@ -4267,7 +4815,20 @@ function generateThematicSettings(source, attribute) {
                 { min: -100, max: -90, color: '#eab308', label: 'Fair (-100 to -90)' },
                 { min: -90, max: Infinity, color: '#22c55e', label: 'Excellent (> -90)' }
             ];
-        } else {
+        } else if (attrLower.includes('sinr')) {
+            ranges = [
+                { min: -Infinity, max: 0, color: '#ef4444', label: 'Poor (< 0 dB)' },
+                { min: 0, max: 15, color: '#eab308', label: 'Fair (0-15 dB)' },
+                { min: 15, max: Infinity, color: '#22c55e', label: 'Excellent (> 15 dB)' }
+            ];
+        } else if (attrLower.includes('rsrq')) {
+            ranges = [
+                { min: -Infinity, max: -15, color: '#ef4444', label: 'Poor (< -15 dB)' },
+                { min: -15, max: -10, color: '#eab308', label: 'Fair (-15 to -10 dB)' },
+                { min: -10, max: Infinity, color: '#22c55e', label: 'Excellent (> -10 dB)' }
+            ];
+        }
+        else {
             // Generic 5-bucket equal interval
             const step = (max - min) / 5;
             const colors = ['#fee2e2', '#fca5a5', '#f87171', '#ef4444', '#b91c1c']; // Red ramp
@@ -4512,11 +5073,11 @@ function renderThematicLegend() {
     const content = document.getElementById('legendContent');
 
     if (!activeThematicSettings.sites && !activeThematicSettings.kml) {
-        container.style.display = 'none';
+        container.classList.add('d-none');
         return;
     }
 
-    container.style.display = 'block';
+    container.classList.remove('d-none');
     content.innerHTML = '';
 
     if (activeThematicSettings.sites) {

@@ -477,6 +477,19 @@ body {
     gap: var(--spacing-md);
 }
 
+/* Connection Line Animation */
+@keyframes dash-flow {
+    to {
+        stroke-dashoffset: -20;
+    }
+}
+
+.connection-line-flow {
+    animation: dash-flow 1s linear infinite;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+}
+
 /* Airtable Section */
 .airtable-section {
     display: flex;
