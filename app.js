@@ -136,7 +136,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize
 function init() {
-    // Map is already initialized in global scope
+    // Map is already initialized in global scope by initializeMap logic if called, 
+    // but looking at DOMContentLoaded listener above: 
+    // document.addEventListener('DOMContentLoaded', () => { initializeMap(); init(); });
+    // So map is ready.
+
+    // SETUP LOGIN
+    setupLogin();
+    setupLogout();
+
+    // Check Login State
+    if (sessionStorage.getItem('isLoggedIn') === 'true') {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('appContainer').style.display = 'flex';
+        setTimeout(() => map.invalidateSize(), 100);
+    } else {
+        // Ensure app is hidden (already hidden by HTML/CSS, but just in case)
+        document.getElementById('loginPage').style.display = 'flex';
+        document.getElementById('appContainer').style.display = 'none';
+    }
+
     initializeEventListeners();
     loadData();
 
@@ -161,6 +180,50 @@ function init() {
             toggleAddMarkerMode(false);
         } else if (isMeasuring) {
             handleMeasureClick(e.latlng);
+        }
+    });
+}
+
+function setupLogin() {
+    const loginForm = document.getElementById('loginForm');
+    if (!loginForm) return;
+
+    loginForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const errorMsg = document.getElementById('loginError');
+
+        // Hardcoded credentials
+        if (username === 'admin' && password === 'admin') {
+            sessionStorage.setItem('isLoggedIn', 'true');
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'flex';
+
+            // Critical: Map needs to know it has resized/appeared
+            setTimeout(() => {
+                map.invalidateSize();
+                // Optional: Fit bounds if needed, but let's stick to state
+            }, 100);
+        } else {
+            errorMsg.textContent = 'Invalid username or password';
+            const container = document.querySelector('.login-container');
+            container.style.animation = 'none';
+            container.offsetHeight;
+            container.style.animation = 'shake 0.5s';
+        }
+    });
+}
+
+function setupLogout() {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (!logoutBtn) return;
+
+    logoutBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to logout?')) {
+            sessionStorage.removeItem('isLoggedIn');
+            location.reload();
         }
     });
 }
@@ -1123,12 +1186,10 @@ async function handleManualSubmit(e) {
         }
     }
 
-    // Save and update
     saveData();
     updateUI();
     updateMapMarkers();
     showSitesList();
-
     // Reset form
     e.target.reset();
     document.getElementById('sectorsContainer').innerHTML = '';
