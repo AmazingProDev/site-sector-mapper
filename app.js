@@ -242,6 +242,14 @@ function initializeMap() {
     map.addLayer(sectorsLayer);
 
     // Initialize Connection Lines Layer
+    // Create custom pane for neon effects (z-index 650 to be above markers which are around 600)
+    map.createPane('neonPane');
+    map.getPane('neonPane').style.zIndex = 650;
+    map.getPane('neonPane').style.pointerEvents = 'none'; // Allow clicking through if needed, but lines might need clicks? 
+    // Actually, getting clicks on lines is fine, but if they cover markers we might want to be careful. 
+    // For now let's leave pointer-events auto (default) but maybe lines are non-interactive?
+    // The previous implementation had interactive: false for sector highlight. 
+
     connectionLinesLayer = L.layerGroup().addTo(map);
 
     // Initialize Draw Controls
@@ -2411,10 +2419,19 @@ function renderVisibleSectors() {
                 interactive: true // Keep interactive for popups
             });
 
+            // Determine Title
+            let title = sector.cell_name || sector.name;
+            if (!title && sector.customProperties) {
+                // Try to find "Cell Name" in custom properties
+                const nameProp = sector.customProperties.find(p => p.name.toLowerCase().includes('cell') && p.name.toLowerCase().includes('name'));
+                if (nameProp) title = nameProp.value;
+            }
+            if (!title) title = 'Sector';
+
             // Add popup
             let popupContent = `
                 <div style="min-width: 150px;">
-                    <h4 style="margin: 0 0 5px 0; color: ${color};">${sector.name || 'Sector'}</h4>
+                    <h4 style="margin: 0 0 5px 0; color: ${color};">${title}</h4>
                     <p style="margin: 0; font-size: 0.875rem;">Azimuth: ${azimuth}°</p>
                     <p style="margin: 0; font-size: 0.875rem;">Beamwidth: ${beamwidth}°</p>
                     <p style="margin: 0; font-size: 0.875rem;">Range: ${range}m</p>
@@ -2580,15 +2597,40 @@ function drawConnectionLine(point) {
             connectionLinesLayer.clearLayers();
 
             const polyline = L.polyline(latlngs, {
-                color: '#ef4444',
-                weight: 4,
-                opacity: 0.9,
-                dashArray: '10, 10',
-                className: 'connection-line-flow',
-                lineCap: 'round'
+                color: '#ff073a',
+                weight: 3,
+                opacity: 1,
+                dashArray: null,
+                className: 'neon-red-pulse',
+                lineCap: 'round',
+                pane: 'neonPane'
             });
-
             connectionLinesLayer.addLayer(polyline);
+
+            // Also highlight the target sector
+            const center = [matchedSite.latitude, matchedSite.longitude];
+            const sectorPolyPoints = [center];
+            const startAngle = (matchedSector.azimuth - matchedSector.beamwidth / 2);
+            const endAngle = (matchedSector.azimuth + matchedSector.beamwidth / 2);
+            const range = matchedSector.range;
+
+            for (let i = 0; i <= 15; i++) {
+                const angle = startAngle + (i / 15) * (endAngle - startAngle);
+                const dest = destination(matchedSite.latitude, matchedSite.longitude, angle, range);
+                sectorPolyPoints.push([dest.lat, dest.lng]);
+            }
+            sectorPolyPoints.push(center);
+
+            const matchPoly = L.polygon(sectorPolyPoints, {
+                color: '#ff073a',
+                fillColor: '#ff073a',
+                fillOpacity: 0.5,
+                weight: 2,
+                className: 'neon-sector-pulse',
+                interactive: false,
+                pane: 'neonPane'
+            });
+            connectionLinesLayer.addLayer(matchPoly);
 
             console.log(`Drawn line from ${cellName} to ${matchedSector.name || 'Sector'}`);
         } catch (e) {
@@ -2646,16 +2688,42 @@ function drawSectorToPoints(sector, site) {
         ];
 
         const polyline = L.polyline(latlngs, {
-            color: '#ef4444',
+            color: '#ff073a',
             weight: 3,
-            opacity: 0.8,
-            dashArray: '10, 10',
-            className: 'connection-line-flow',
+            opacity: 1,
+            dashArray: null, // Solid line for neon
+            className: 'neon-red-pulse',
             lineCap: 'round'
         });
 
         connectionLinesLayer.addLayer(polyline);
     });
+
+    // Highlight the Source Sector with Neon Pulse
+    // Re-calculate polygon
+    const center = [site.latitude, site.longitude];
+    const sectorPolyPoints = [center];
+    const startAngle = (sector.azimuth - sector.beamwidth / 2);
+    const endAngle = (sector.azimuth + sector.beamwidth / 2);
+    const range = sector.range;
+
+    for (let i = 0; i <= 15; i++) {
+        const angle = startAngle + (i / 15) * (endAngle - startAngle);
+        const dest = destination(site.latitude, site.longitude, angle, range);
+        sectorPolyPoints.push([dest.lat, dest.lng]);
+    }
+    sectorPolyPoints.push(center);
+
+    const matchPoly = L.polygon(sectorPolyPoints, {
+        color: '#ff073a',
+        fillColor: '#ff073a',
+        fillOpacity: 0.5,
+        weight: 2,
+        className: 'neon-sector-pulse',
+        interactive: false,
+        pane: 'neonPane'
+    });
+    connectionLinesLayer.addLayer(matchPoly);
 
     showNotification(`Connected to ${matches.length} matching kml points`, 'success');
 }
@@ -4979,93 +5047,170 @@ function renderSuggestions(results) {
 
 let mapLegendControl = null;
 
+// ==================== DYNAMIC MAP LEGEND ====================
+
 function renderMapLegend() {
+    console.log('Rendering Map Legend...', activeThematicSettings);
+    // 1. Remove existing control if it exists (legacy cleanup)
     if (mapLegendControl) {
         map.removeControl(mapLegendControl);
         mapLegendControl = null;
     }
 
-    if (!activeThematicSettings.sites && !activeThematicSettings.kml) return;
+    // 2. Check if we have data to show
+    if (!activeThematicSettings.sites && !activeThematicSettings.kml) {
+        // If inactive, hide the legend if it exists
+        const existingLegend = document.getElementById('dynamicLegend');
+        if (existingLegend) existingLegend.style.display = 'none';
+        return;
+    }
 
-    mapLegendControl = L.control({ position: 'topright' });
+    // 3. Get or Create Legend Element
+    let legend = document.getElementById('dynamicLegend');
+    if (!legend) {
+        const mapContainer = map.getContainer(); // Use Map container or Document body
+        // Appending to map container ensures it moves if map container moves, but for absolute drag, 
+        // appending to body might be cleaner if map is fullscreen. 
+        // Let's stick to map.getContainer() so it stays within the app view.
+        // Wait, map panes capture clicks. We need it ON TOP.
 
-    mapLegendControl.onAdd = function (map) {
-        const div = L.DomUtil.create('div', 'info legend');
+        legend = L.DomUtil.create('div', 'dynamic-legend', mapContainer);
+        legend.id = 'dynamicLegend';
+        legend.style.display = 'none';
 
-        // Dark Transparent Compact Style
-        div.style.background = 'rgba(0, 0, 0, 0.5)';
-        div.style.padding = '10px';
-        div.style.borderRadius = '12px';
-        div.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
-        div.style.backdropFilter = 'blur(4px)';
-        div.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
-        div.style.minWidth = '200px';
-        div.style.color = '#f3f4f6';
-        div.style.transition = 'all 0.3s ease';
-        div.style.maxHeight = '80vh';
-        div.style.overflowY = 'auto';
+        // Disable Map Interactions on the legend
+        L.DomEvent.disableClickPropagation(legend);
+        L.DomEvent.disableScrollPropagation(legend);
 
-        const renderSection = (settings, titlePrefix) => {
-            const title = settings.attribute.replace(/^custom:/, '');
-            let html = `
-                <div style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
-                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -0.01em; text-transform: capitalize;">
-                        ${titlePrefix}: ${title}
-                    </h4>
+        // Make Draggable
+        makeElementDraggable(legend);
+    }
+
+    legend.style.display = 'flex';
+    legend.innerHTML = ''; // Clear content
+
+    // 4. Create Header (Drag Handle)
+    const header = document.createElement('div');
+    header.className = 'legend-header';
+    header.innerHTML = `
+        <span>Thematic Legend</span>
+        <div style="display:flex; gap: 5px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7; cursor: pointer;" onclick="document.getElementById('dynamicLegend').style.display='none'">
+                <path d="M18 6L6 18M6 6l12 12"></path>
+            </svg>
+        </div>
+    `;
+    legend.appendChild(header);
+
+    // 5. Create Content Area
+    const content = document.createElement('div');
+    content.className = 'legend-content';
+    legend.appendChild(content);
+
+    // 6. Build Content HTML
+    const renderSection = (settings, titlePrefix) => {
+        const title = settings.attribute.replace(/^custom:/, '');
+        let html = `
+            <div style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #fff; letter-spacing: -0.01em; text-transform: capitalize;">
+                    ${titlePrefix}: ${title}
+                </h4>
+            </div>
+        `;
+
+        html += `
+            <div style="display: flex; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 8px; font-weight: 600;">
+                <span style="flex: 1;">Range / Name</span>
+                <span style="margin-left: auto;">Count</span>
+            </div>
+        `;
+
+        const renderItem = (label, color, count, total) => {
+            const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+            return `
+            <div style="display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; padding: 2px 0; border-radius: 4px;">
+                <div style="width: 12px; height: 12px; background: ${color}; border-radius: 3px; margin-right: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;"></div>
+                <span style="flex: 1; font-weight: 500; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;" title="${label}">${label}</span>
+                <div style="margin-left: auto; text-align: right; line-height: 1.2;">
+                    <div style="font-weight: 600; color: #f9fafb;">${count}</div>
+                    <div style="font-size: 11px; font-weight: 500; color: #d1d5db;">${pct}%</div>
                 </div>
-            `;
-
-            html += `
-                <div style="display: flex; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 8px; font-weight: 600;">
-                    <span style="flex: 1;">Range / Name</span>
-                    <span style="margin-left: auto;">Count</span>
-                </div>
-            `;
-
-            const renderItem = (label, color, count, total) => {
-                const pct = ((count / total) * 100).toFixed(1);
-                return `
-                <div style="display: flex; align-items: center; margin-bottom: 6px; font-size: 11px; padding: 2px 0; border-radius: 4px;">
-                    <div style="width: 12px; height: 12px; background: ${color}; border-radius: 3px; margin-right: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); flex-shrink: 0;"></div>
-                    <span style="flex: 1; font-weight: 500; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 8px;" title="${label}">${label}</span>
-                    <div style="margin-left: auto; text-align: right; line-height: 1.2;">
-                        <div style="font-weight: 600; color: #f9fafb;">${count}</div>
-                        <div style="font-size: 11px; font-weight: 500; color: #d1d5db;">${pct}%</div>
-                    </div>
-                </div>`;
-            };
-
-            if (settings.type === 'categorical') {
-                settings.uniqueValues.forEach(val => {
-                    const color = settings.mapping[val];
-                    const count = settings.counts[val] || 0;
-                    const label = settings.labels?.[val] || val;
-                    html += renderItem(label, color, count, settings.total);
-                });
-            } else {
-                settings.ranges.forEach(range => {
-                    html += renderItem(range.label, range.color, range.count || 0, settings.total); // count might be missing if not recalculated
-                });
-            }
-            return html;
+            </div>`;
         };
 
-        if (activeThematicSettings.sites) {
-            div.innerHTML += renderSection(activeThematicSettings.sites, 'Sites');
+        if (settings.type === 'categorical') {
+            settings.uniqueValues.forEach(val => {
+                const color = settings.mapping[val];
+                const count = settings.counts[val] || 0;
+                const label = settings.labels?.[val] || val;
+                html += renderItem(label, color, count, settings.total);
+            });
+        } else {
+            settings.ranges.forEach(range => {
+                html += renderItem(range.label, range.color, range.count || 0, settings.total);
+            });
         }
-
-        if (activeThematicSettings.sites && activeThematicSettings.kml) {
-            div.innerHTML += '<div style="height: 15px;"></div>'; // Spacer
-        }
-
-        if (activeThematicSettings.kml) {
-            div.innerHTML += renderSection(activeThematicSettings.kml, 'KML');
-        }
-
-        return div;
+        return html;
     };
 
-    mapLegendControl.addTo(map);
+    if (activeThematicSettings.sites) {
+        content.innerHTML += renderSection(activeThematicSettings.sites, 'Sites');
+    }
+
+    if (activeThematicSettings.sites && activeThematicSettings.kml) {
+        content.innerHTML += '<div style="height: 15px;"></div>'; // Spacer
+    }
+
+    if (activeThematicSettings.kml) {
+        content.innerHTML += renderSection(activeThematicSettings.kml, 'KML');
+    }
+}
+
+// Helper: Make Element Draggable
+function makeElementDraggable(elmnt) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    const header = elmnt.querySelector('.legend-header') || elmnt; // Drag via header if exists
+
+    // We can't attach to header here because header is re-created on each render.
+    // Instead, attach to element and check target, or attach to header inside render.
+    // Better: Attach mousedown to element, but check if target is within header.
+
+    elmnt.onmousedown = dragMouseDown;
+
+    function dragMouseDown(e) {
+        // Only drag if clicking the header
+        if (!e.target.closest('.legend-header')) return;
+
+        e = e || window.event;
+        e.preventDefault();
+        // Get the mouse cursor position at startup:
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        // Call a function whenever the cursor moves:
+        document.onmousemove = elementDrag;
+    }
+
+    function elementDrag(e) {
+        e = e || window.event;
+        e.preventDefault();
+        // Calculate the new cursor position:
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        // set the element's new position:
+        elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+        elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+        // Remove 'right' property if it exists so left/top takes precedence
+        elmnt.style.right = 'auto';
+    }
+
+    function closeDragElement() {
+        // stop moving when mouse button is released:
+        document.onmouseup = null;
+        document.onmousemove = null;
+    }
 }
 
 function renderThematicLegend() {
