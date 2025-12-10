@@ -316,13 +316,29 @@ function initializeMap() {
     // Initial call
     updateZoomClasses();
 
-    // Add tile layer
-    // Add tile layer (Google Streets)
-    L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    // Base Layers
+    const streetLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
         maxZoom: 20,
         subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
         attribution: '© Google Maps'
-    }).addTo(map);
+    });
+
+    const satelliteLayer = L.tileLayer('http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '© Google Maps'
+    });
+
+    // Default to Street
+    streetLayer.addTo(map);
+
+    // Layer Control
+    const baseMaps = {
+        "Street Map": streetLayer,
+        "Satellite Map": satelliteLayer
+    };
+
+    L.control.layers(baseMaps).addTo(map);
 
     // Initialize marker cluster group
     markersLayer = L.markerClusterGroup({
