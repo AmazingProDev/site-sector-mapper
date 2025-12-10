@@ -674,6 +674,7 @@ function initializeEventListeners() {
     });
 
     document.getElementById('exportFullBtn').addEventListener('click', () => {
+        exportToKML('full');
         exportModal.style.display = 'none';
     });
 
@@ -1622,8 +1623,12 @@ function handleKmlFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // alert(`Debug: File selected: ${file.name}`); // Debug
-    processKmlFile(file);
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (extension === 'xlsx' || extension === 'xls') {
+        parseExcelFile(file);
+    } else {
+        processKmlFile(file);
+    }
 }
 
 function processKmlFile(file) {
@@ -1641,7 +1646,7 @@ function processKmlFile(file) {
             const parsedData = parseKml(text);
             if (parsedData.length === 0) {
                 showNotification('No valid points found in KML file.', 'warning');
-                alert('Debug: No valid points found in KML');
+                // alert('Debug: No valid points found in KML');
             } else {
                 kmlData = parsedData;
                 // alert(`Debug: Parsed ${kmlData.length} points`); // Debug
@@ -1867,6 +1872,158 @@ function parseKml(xmlText) {
     }
 
     return parsedPoints;
+}
+
+// Parse Excel File
+function parseExcelFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        // Assume first sheet
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+
+        // Convert to Array of Arrays first to find header
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (!rawData || rawData.length === 0) {
+            alert('No data found in Excel file.');
+            return;
+        }
+
+        // Find Header Row (Scan first 20 rows)
+        let headerRowIndex = -1;
+        let foundKeys = [];
+
+        for (let i = 0; i < Math.min(20, rawData.length); i++) {
+            const row = rawData[i];
+            if (!row || row.length === 0) continue;
+
+            const rowStr = row.map(c => String(c).trim().toLowerCase());
+
+            const hasLat = rowStr.some(k => ['latitude', 'lat', 'y'].includes(k) || k.includes('lat'));
+            const hasLng = rowStr.some(k => ['longitude', 'long', 'lng', 'x'].includes(k) || k.includes('lon') || k.includes('lng'));
+
+            if (hasLat && hasLng) {
+                headerRowIndex = i;
+                foundKeys = row;
+                break;
+            }
+        }
+
+        if (headerRowIndex === -1) {
+            // Fallback to row 0 if not found, let the standard check handle failure
+            console.warn('Could not auto-detect header row. Defaulting to first row.');
+            headerRowIndex = 0;
+        }
+
+        console.log(`Detected header at row index: ${headerRowIndex}`);
+
+        // Re-parse with correct header row
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "", range: headerRowIndex });
+
+        if (!jsonData || jsonData.length === 0) {
+            alert('No data found in Excel file.');
+            return;
+        }
+
+        // Identify Columns
+        const keys = Object.keys(jsonData[0]);
+        console.log('Excel Keys Found:', keys);
+
+        // Normalize keys (trim whitespace and lowercase)
+        const normalizedKeys = keys.map(k => k.trim().toLowerCase());
+
+        // Heuristics for Latitude
+        let latIndex = normalizedKeys.findIndex(k => ['latitude', 'lat', 'y'].includes(k));
+        if (latIndex === -1) latIndex = normalizedKeys.findIndex(k => k.includes('lat'));
+
+        // Heuristics for Longitude
+        let lngIndex = normalizedKeys.findIndex(k => ['longitude', 'long', 'lng', 'x'].includes(k));
+        if (lngIndex === -1) lngIndex = normalizedKeys.findIndex(k => k.includes('lon') || k.includes('lng'));
+
+        if (latIndex === -1 || lngIndex === -1) {
+            console.error('Could not find Lat/Lng. Keys:', keys);
+            alert(`Could not identify Latitude/Longitude columns.\n\nFound columns: ${keys.join(', ')}\n\nPlease ensure your Excel file has columns named "Latitude" and "Longitude".`);
+            return;
+        }
+
+        const latKey = keys[latIndex];
+        const lngKey = keys[lngIndex];
+
+        console.log(`Using Latitude Key: "${latKey}"`);
+        console.log(`Using Longitude Key: "${lngKey}"`);
+
+        const parsedPoints = jsonData.map((row, index) => {
+            const parseCoord = (val) => {
+                if (typeof val === 'number') return val;
+                if (typeof val === 'string') {
+                    // Replace comma with dot and parse
+                    const normalized = val.replace(/,/g, '.').trim();
+                    return parseFloat(normalized);
+                }
+                return NaN;
+            };
+
+            const lat = parseCoord(row[latKey]);
+            const lng = parseCoord(row[lngKey]);
+
+            if (isNaN(lat) || isNaN(lng)) return null;
+
+            // Extract Custom Properties (exclude lat/lng)
+            const customProperties = [];
+            keys.forEach(key => {
+                if (key !== latKey && key !== lngKey) {
+                    customProperties.push({
+                        name: key,
+                        value: row[key] // Keep as is (string or number)
+                    });
+                }
+            });
+
+            return {
+                name: `Point ${index + 1}`,
+                latitude: lat,
+                longitude: lng,
+                description: '',
+                color: '#3b82f6', // Default blue for Excel
+                customProperties: customProperties
+            };
+        }).filter(p => p !== null);
+
+        kmlData = parsedPoints;
+
+        // Render Preview
+        const previewContent = document.getElementById('kmlPreviewContent');
+        if (previewContent) {
+            let html = `<p>Found ${parsedPoints.length} valid points.</p>`;
+            html += `<p><strong>Attributes found:</strong> ${keys.filter(k => k !== latKey && k !== lngKey).join(', ')}</p>`;
+            html += '<table class="table table-sm table-striped"><thead><tr><th>Lat</th><th>Lng</th><th>Attributes (First 5)</th></tr></thead><tbody>';
+
+            parsedPoints.slice(0, 5).forEach(p => {
+                const props = p.customProperties.map(prop => `${prop.name}: ${prop.value}`).join(', ');
+                html += `<tr><td>${p.latitude.toFixed(5)}</td><td>${p.longitude.toFixed(5)}</td><td>${props}</td></tr>`;
+            });
+
+            html += '</tbody></table>';
+            previewContent.innerHTML = html;
+        }
+
+        document.getElementById('kmlPreview').classList.remove('d-none');
+        document.getElementById('kmlDropZone').classList.add('d-none');
+
+        // Auto-import (Fully Automatic)
+        setTimeout(() => {
+            importKmlData();
+        }, 500);
+    };
+    reader.onerror = (err) => {
+        console.error("Error reading Excel file:", err);
+        alert("Error reading Excel file.");
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 // Import KML Data
@@ -3065,8 +3222,29 @@ function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, f
             return;
         }
 
+        // High Performance Rendering for KML Points
         const pointColor = getPointColor(point);
-        const customIcon = createCustomIcon(point, pointColor);
+        let marker;
+
+        if (point.type === 'kml_point') {
+            // Use CircleMarker (Canvas/SVG) for performance with many points
+            marker = L.circleMarker([point.latitude, point.longitude], {
+                radius: 5,
+                fillColor: pointColor,
+                color: '#fff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.8,
+                pointId: point.id // Store ID
+            });
+        } else {
+            // Use Custom Icon for manually added points
+            const customIcon = createCustomIcon(point, pointColor);
+            marker = L.marker([point.latitude, point.longitude], {
+                icon: customIcon,
+                pointId: point.id
+            });
+        }
 
         // Create popup content
         let popupContent = `
@@ -3087,11 +3265,6 @@ function updateMapMarkers(options = { fitBounds: true }, filteredSites = null, f
                 popupContent += `<b>${prop.name}:</b> ${prop.value}<br>`;
             });
         }
-
-        const marker = L.marker([point.latitude, point.longitude], {
-            icon: customIcon,
-            pointId: point.id
-        });
 
         marker.bindPopup(popupContent);
 
@@ -5144,18 +5317,28 @@ function generateThematicSettings(source, attribute) {
                 { min: -15, max: -10, color: '#eab308', label: 'Fair (-15 to -10 dB)' },
                 { min: -10, max: Infinity, color: '#22c55e', label: 'Excellent (> -10 dB)' }
             ];
-        }
-        else {
+        } else {
             // Generic 5-bucket equal interval
             const step = (max - min) / 5;
             const colors = ['#fee2e2', '#fca5a5', '#f87171', '#ef4444', '#b91c1c']; // Red ramp
-            for (let i = 0; i < 5; i++) {
+
+            // Handle single value case
+            if (step === 0) {
                 ranges.push({
-                    min: min + (i * step),
-                    max: min + ((i + 1) * step),
-                    color: colors[i],
-                    label: `${Math.round(min + (i * step))} - ${Math.round(min + ((i + 1) * step))}`
+                    min: min,
+                    max: max,
+                    color: colors[0],
+                    label: `${min}`
                 });
+            } else {
+                for (let i = 0; i < 5; i++) {
+                    ranges.push({
+                        min: min + (i * step),
+                        max: min + ((i + 1) * step),
+                        color: colors[i],
+                        label: `${Math.round(min + (i * step))} - ${Math.round(min + ((i + 1) * step))}`
+                    });
+                }
             }
         }
 
@@ -5491,7 +5674,7 @@ function renderLegendControls(settings, container, title) {
     const header = document.createElement('h5');
     header.textContent = `${title}: ${settings.attribute}`;
     header.style.marginBottom = '10px';
-    header.style.color = '#333';
+    header.style.color = '#eee';
     container.appendChild(header);
 
     if (settings.type === 'categorical') {
@@ -5533,7 +5716,7 @@ function renderLegendControls(settings, container, title) {
             const valueLabel = document.createElement('span');
             valueLabel.textContent = val;
             valueLabel.style.fontSize = '0.9em';
-            valueLabel.style.color = '#333';
+            valueLabel.style.color = '#eee';
             valueLabel.style.marginRight = '5px';
             valueLabel.style.flex = '1';
             item.appendChild(valueLabel);
